@@ -1,10 +1,39 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
 import { join } from 'path'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, statSync, createReadStream } from 'fs'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import * as http from 'http'
+import { lookup } from 'mime-types'
 
 app.commandLine.appendSwitch('no-sandbox')
+
+// ── Local HTTP server for Firebase Auth compatibility ─────────────────────────
+// Firebase Auth requires http/https origin — file:// is blocked in production
+let localPort = 0
+
+function startLocalServer(): Promise<number> {
+  return new Promise((resolve) => {
+    const rendererDir = join(__dirname, '../renderer')
+    const server = http.createServer((req, res) => {
+      const urlPath = req.url === '/' || !req.url ? '/index.html' : req.url!
+      const filePath = join(rendererDir, urlPath.split('?')[0])
+      try {
+        const mimeType = (lookup(filePath) || 'text/plain') as string
+        res.writeHead(200, { 'Content-Type': mimeType })
+        createReadStream(filePath).pipe(res)
+      } catch {
+        // SPA fallback
+        res.writeHead(200, { 'Content-Type': 'text/html' })
+        createReadStream(join(rendererDir, 'index.html')).pipe(res)
+      }
+    })
+    server.listen(0, '127.0.0.1', () => {
+      localPort = (server.address() as { port: number }).port
+      resolve(localPort)
+    })
+  })
+}
 
 const execAsync = promisify(exec)
 import chokidar from 'chokidar'
@@ -34,7 +63,7 @@ function createWindow(): void {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadURL(`http://127.0.0.1:${localPort}/index.html`)
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
@@ -171,10 +200,13 @@ ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string)
 })
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Start local HTTP server so Firebase Auth works in production (file:// is blocked)
+  await startLocalServer()
+
   // Auto-grant all media permissions (mic, camera, audio)
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(true) // grant everything in dev; scope this in production
+    callback(true)
   })
   session.defaultSession.setPermissionCheckHandler(() => true)
 
