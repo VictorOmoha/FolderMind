@@ -270,3 +270,62 @@ body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidde
 
 /* ── Debug bar ── */
 .debug-bar { padding: 4px 24px; }
+
+/* ── Usage hints ── */
+.usage-hint { font-size: 12px; color: var(--text-muted); margin-top: 16px; }
+.btn-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; }
+.btn-link:hover { text-decoration: underline; }
+.usage-pill {
+  font-size: 11px; color: var(--text-muted); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px;
+}
+
+/* ── Upgrade Modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 40px 36px; max-width: 760px; width: 90%;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.modal-icon { font-size: 40px; }
+.modal-title { font-size: 24px; font-weight: 700; }
+.modal-message { font-size: 14px; color: var(--text-muted); text-align: center; margin-bottom: 8px; }
+
+.pricing-grid { display: flex; gap: 16px; width: 100%; margin: 8px 0; }
+.pricing-tier {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px 20px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pricing-tier.highlight { border-color: var(--accent); background: #1a1a3e; }
+.pricing-tier.current { opacity: 0.7; }
+
+.tier-name { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.tier-price { font-size: 32px; font-weight: 800; }
+.tier-price span { font-size: 14px; font-weight: 400; color: var(--text-muted); }
+.tier-features { list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; flex: 1; margin: 8px 0; }
+.tier-features li::before { content: '✓ '; color: var(--green); }
+.tier-features li.disabled { color: var(--text-muted); }
+.tier-features li.disabled::before { content: '✗ '; color: #555; }
+
+.tier-badge { font-size: 12px; color: var(--text-muted); text-align: center; padding: 6px; }
+
+.btn-upgrade {
+  background: var(--accent); color: white; border: none;
+  padding: 10px 16px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s; text-align: center;
+}
+.btn-upgrade:hover { background: var(--accent-hover); }
+.btn-upgrade.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.btn-upgrade.secondary:hover { background: var(--border); }
+
+.modal-close {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; margin-top: 4px;
+}
+.modal-close:hover { color: var(--text); }

@@ -1,14 +1,18 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatPanel } from './components/ChatPanel'
 import { AuthScreen } from './components/AuthScreen'
+import { UpgradeModal } from './components/UpgradeModal'
 import { useFolder } from './hooks/useFolder'
 import { useAuth } from './hooks/useAuth'
+import { useUsage } from './hooks/useUsage'
 import type { SmartFolder } from './hooks/useFolder'
 import './App.css'
 
 export default function App() {
   const { user, authState, error, loginWithEmail, signupWithEmail, loginWithGoogle, logout } = useAuth()
+  const { canCreateFolder, canSendAI, foldersRemaining, aiCallsRemaining, trackFolderCreated, trackAICall } = useUsage(user)
+  const [upgradeReason, setUpgradeReason] = useState<'folders' | 'ai_calls' | null>(null)
 
   const {
     activeFolder,
@@ -20,9 +24,13 @@ export default function App() {
     updateMemory,
   } = useFolder(user)
 
-  const handleSelectFolder = useCallback((_folder: SmartFolder) => {
-    // Re-open from path
-  }, [])
+  const handleSelectFolder = useCallback((_folder: SmartFolder) => {}, [])
+
+  const handleCreateFolder = useCallback(async () => {
+    if (!canCreateFolder) { setUpgradeReason('folders'); return }
+    const folder = await createFolder()
+    if (folder) trackFolderCreated()
+  }, [canCreateFolder, createFolder, trackFolderCreated])
 
   const handleFileCreated = useCallback(async (name: string, content: string) => {
     await writeFile(name, content)
@@ -32,7 +40,20 @@ export default function App() {
     await updateMemory(newMemory)
   }, [updateMemory])
 
-  // ── Loading state ─────────────────────────────────────────────────────────
+  const handleAICall = useCallback(() => {
+    if (!canSendAI) { setUpgradeReason('ai_calls'); return false }
+    trackAICall()
+    return true
+  }, [canSendAI, trackAICall])
+
+  const handleUpgrade = () => {
+    // Opens Stripe checkout in external browser
+    const url = 'https://buy.stripe.com/YOUR_STRIPE_PAYMENT_LINK'
+    window.open(url, '_blank')
+    setUpgradeReason(null)
+  }
+
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (authState === 'loading') {
     return (
       <div className="splash">
@@ -59,10 +80,18 @@ export default function App() {
   // ── Main app ──────────────────────────────────────────────────────────────
   return (
     <div className="app">
+      {upgradeReason && (
+        <UpgradeModal
+          reason={upgradeReason}
+          onClose={() => setUpgradeReason(null)}
+          onUpgrade={handleUpgrade}
+        />
+      )}
+
       <Sidebar
         activeFolder={activeFolder}
         recentFolders={recentFolders}
-        onCreateFolder={createFolder}
+        onCreateFolder={handleCreateFolder}
         onOpenFolder={openFolder}
         onSelectFolder={handleSelectFolder}
       />
@@ -82,13 +111,24 @@ export default function App() {
                 Your AI reads everything — no re-explaining required.
               </p>
               <div className="welcome-actions">
-                <button className="btn-primary large" onClick={createFolder}>
+                <button className="btn-primary large" onClick={handleCreateFolder}>
                   + Create Smart Folder
                 </button>
                 <button className="btn-secondary large" onClick={openFolder}>
                   Open Existing Folder
                 </button>
               </div>
+              <p className="usage-hint">
+                {foldersRemaining === Infinity
+                  ? '✨ Pro — unlimited folders'
+                  : `${foldersRemaining} folder${foldersRemaining !== 1 ? 's' : ''} remaining on free plan`}
+                {' · '}
+                {aiCallsRemaining === Infinity
+                  ? 'unlimited AI calls'
+                  : `${aiCallsRemaining} AI calls left this month`}
+                {' · '}
+                <button className="btn-link" onClick={() => setUpgradeReason('folders')}>Upgrade</button>
+              </p>
             </div>
           </div>
         ) : (
@@ -99,6 +139,9 @@ export default function App() {
                 <span className="folder-path">{activeFolder.path}</span>
               </div>
               <div className="workspace-right">
+                <span className="usage-pill">
+                  {aiCallsRemaining === Infinity ? '∞' : aiCallsRemaining} calls left
+                </span>
                 <div className="workspace-badge">🧠 Agent Active</div>
                 <button className="btn-ghost small" onClick={logout}>Sign out</button>
               </div>
@@ -111,6 +154,7 @@ export default function App() {
               onMemoryUpdate={handleMemoryUpdate}
               onFileCreated={handleFileCreated}
               getContext={getContext}
+              onBeforeSend={handleAICall}
             />
           </div>
         )}

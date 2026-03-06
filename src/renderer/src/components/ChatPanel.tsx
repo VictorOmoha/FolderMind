@@ -8,6 +8,7 @@ interface Props {
   onMemoryUpdate: (memory: string) => void
   onFileCreated: (name: string, content: string) => void
   getContext: () => Promise<FileContext[]>
+  onBeforeSend?: () => boolean // returns false if blocked (limit hit)
 }
 
 const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY
@@ -42,7 +43,7 @@ async function transcribeAudio(blob: Blob): Promise<string> {
   return data.text ?? ''
 }
 
-export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFileCreated, getContext }: Props) {
+export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFileCreated, getContext, onBeforeSend }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -110,6 +111,7 @@ export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFi
   // ── Send message ──────────────────────────────────────────────────────────
   const send = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
+    if (onBeforeSend && !onBeforeSend()) return // blocked by usage limit
 
     const userMsg: Message = { role: 'user', content: text }
     setMessages(prev => [...prev, userMsg])
