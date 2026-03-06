@@ -178,3 +178,95 @@ body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidde
 }
 .btn-send:hover { background: var(--accent-hover); }
 .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Ghost button ── */
+.btn-ghost {
+  background: transparent; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.btn-ghost:hover { color: var(--text); background: var(--surface2); }
+.btn-ghost.small { font-size: 12px; }
+
+/* ── Workspace right ── */
+.workspace-right { display: flex; align-items: center; gap: 12px; }
+
+/* ── Welcome user bar ── */
+.welcome-user {
+  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  font-size: 12px; color: var(--text-muted); margin-bottom: 32px;
+}
+
+/* ── Splash ── */
+.splash {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+.splash-inner { text-align: center; color: var(--text-muted); }
+.splash-icon { font-size: 48px; display: block; margin-bottom: 16px; }
+
+/* ── Auth Screen ── */
+.auth-screen {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+.auth-card {
+  width: 100%; max-width: 380px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 40px 36px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.auth-logo { font-size: 48px; margin-bottom: 4px; }
+.auth-title { font-size: 24px; font-weight: 700; margin-bottom: 2px; }
+.auth-tagline { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+
+.auth-form { width: 100%; display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.auth-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  padding: 11px 14px; font-size: 14px; font-family: inherit;
+}
+.auth-input:focus { outline: none; border-color: var(--accent); }
+
+.auth-error {
+  font-size: 12px; color: #f87171; background: #2a1010;
+  border: 1px solid #7f1d1d; border-radius: 8px;
+  padding: 8px 12px; text-align: center;
+}
+
+.auth-btn-primary {
+  width: 100%; background: var(--accent); color: white; border: none;
+  padding: 12px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+.auth-btn-primary:hover { background: var(--accent-hover); }
+
+.auth-divider {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  color: var(--text-muted); font-size: 12px; margin: 4px 0;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+.auth-btn-google {
+  width: 100%; background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  transition: background 0.15s;
+}
+.auth-btn-google:hover { background: var(--border); }
+
+.auth-toggle {
+  font-size: 13px; color: var(--text-muted); margin-top: 4px;
+}
+.auth-toggle button {
+  background: none; border: none; color: var(--accent);
+  cursor: pointer; font-size: 13px; padding: 0;
+}
+.auth-toggle button:hover { text-decoration: underline; }
+
+/* ── Debug bar ── */
+.debug-bar { padding: 4px 24px; }

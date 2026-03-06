@@ -55,6 +55,8 @@ export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFi
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const messagesRef = useRef<Message[]>([])
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const silenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streaming])
@@ -155,69 +157,91 @@ export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFi
   }, [loading, folderName, memory, getContext, handleToolCall, onMemoryUpdate, voiceEnabled])
 
   // ── Mic ───────────────────────────────────────────────────────────────────
+  const cleanupAudio = useCallback(() => {
+    if (silenceTimerRef.current) { clearInterval(silenceTimerRef.current); silenceTimerRef.current = null }
+    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null }
+  }, [])
+
   const startRecording = useCallback(async () => {
+    setMessages(prev => [...prev, { role: 'assistant', content: '🎙️ Listening...' }])
     try {
-      console.log('[FolderMind] Requesting mic...')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      console.log('[FolderMind] Mic granted, tracks:', stream.getAudioTracks().length)
 
-      // Pick best supported format
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/ogg'
+      // ── Silence detection via Web Audio ──────────────────────────────────
+      const audioCtx = new AudioContext()
+      audioCtxRef.current = audioCtx
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      audioCtx.createMediaStreamSource(stream).connect(analyser)
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
 
-      const recorder = new MediaRecorder(stream, { mimeType })
+      const SILENCE_THRESHOLD = 8   // RMS (0–100) below this = silence
+      const SILENCE_MS = 1500       // ms of silence before auto-stop
+      const MIN_RECORD_MS = 600     // don't auto-stop before this
+      const recordingStart = Date.now()
+      let silenceStart: number | null = null
+
+      const recorder = new MediaRecorder(stream)
       chunksRef.current = []
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
 
-      recorder.ondataavailable = e => {
-        console.log('[FolderMind] Audio chunk:', e.data.size, 'bytes')
-        if (e.data.size > 0) chunksRef.current.push(e.data)
-      }
+      silenceTimerRef.current = setInterval(() => {
+        analyser.getByteTimeDomainData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) {
+          const v = (dataArray[i] - 128) / 128
+          sum += v * v
+        }
+        const rms = Math.sqrt(sum / dataArray.length) * 100
+
+        if (rms < SILENCE_THRESHOLD) {
+          if (silenceStart === null) silenceStart = Date.now()
+          else if (Date.now() - silenceStart > SILENCE_MS && Date.now() - recordingStart > MIN_RECORD_MS) {
+            cleanupAudio()
+            recorder.stop()
+            setRecording(false)
+          }
+        } else {
+          silenceStart = null
+        }
+      }, 100)
 
       recorder.onstop = async () => {
+        cleanupAudio()
         stream.getTracks().forEach(t => t.stop())
-        setTranscribing(true)
+        const total = chunksRef.current.reduce((n, b) => n + b.size, 0)
+
+        if (total < 500) {
+          setMessages(prev => prev.filter(m => !m.content.startsWith('🎙️')))
+          setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Too short — speak for at least 1 second.' }])
+          return
+        }
+
         try {
-          const blob = new Blob(chunksRef.current, { type: mimeType })
-          // Show blob size so we know if audio was captured
-          setMessages(prev => [...prev, { role: 'assistant', content: `🎙️ Audio captured: ${blob.size} bytes — transcribing...` }])
-
-          if (blob.size < 1000) {
-            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Audio too small — did you speak? Try holding the button longer.' }])
-            setTranscribing(false)
-            return
-          }
-
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
           const transcript = await transcribeAudio(blob)
-          // Remove the "transcribing" message and replace with actual transcript
-          setMessages(prev => prev.filter(m => !m.content.startsWith('🎙️ Audio captured')))
-
-          if (transcript.trim()) {
-            send(transcript)
-          } else {
-            setMessages(prev => [...prev, { role: 'assistant', content: "🎙️ Whisper returned empty — speak clearly and try again." }])
-          }
-        } catch (e) {
-          setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Transcription error: ${e}` }])
+          setMessages(prev => prev.filter(m => !m.content.startsWith('🎙️')))
+          if (transcript.trim()) send(transcript)
+          else setMessages(prev => [...prev, { role: 'assistant', content: "🎙️ Couldn't hear you clearly — try again." }])
+        } catch (err) {
+          setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Whisper error: ${err}` }])
         }
         setTranscribing(false)
       }
 
-      recorder.start(250) // collect chunks every 250ms
+      recorder.start()
       mediaRecorderRef.current = recorder
       setRecording(true)
-    } catch (e) {
-      console.error('[FolderMind] Mic error:', e)
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Mic error: ${e}. Make sure no other app is using the mic.` }])
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Mic failed: ${err}` }])
     }
-  }, [send])
+  }, [send, cleanupAudio])
 
   const stopRecording = useCallback(() => {
+    cleanupAudio()
     mediaRecorderRef.current?.stop()
     setRecording(false)
-  }, [])
+  }, [cleanupAudio])
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) }

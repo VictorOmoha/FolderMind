@@ -1,4 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
+import type { User } from 'firebase/auth'
+import { syncFolder, syncMemory } from '../lib/sync'
 
 export interface SmartFolder {
   path: string
@@ -16,32 +18,39 @@ declare global {
       writeFile: (folderPath: string, fileName: string, content: string) => Promise<boolean>
       updateMemory: (folderPath: string, memory: string) => Promise<boolean>
       onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => () => void
+      testMic: () => Promise<{ ok: boolean; tracks: number }>
     }
   }
 }
 
-export function useFolder() {
+export function useFolder(user: User | null) {
   const [activeFolder, setActiveFolder] = useState<SmartFolder | null>(null)
   const [recentFolders, setRecentFolders] = useState<SmartFolder[]>([])
   const [fileChanged, setFileChanged] = useState(0)
+
+  const addToRecent = (folder: SmartFolder) => {
+    setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
+  }
 
   const createFolder = useCallback(async () => {
     const folder = await window.foldermind.createFolder()
     if (folder) {
       setActiveFolder(folder)
-      setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
+      addToRecent(folder)
+      if (user) syncFolder(user, folder).catch(console.warn)
     }
     return folder
-  }, [])
+  }, [user])
 
   const openFolder = useCallback(async () => {
     const folder = await window.foldermind.openFolder()
     if (folder) {
       setActiveFolder(folder)
-      setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
+      addToRecent(folder)
+      if (user) syncFolder(user, folder).catch(console.warn)
     }
     return folder
-  }, [])
+  }, [user])
 
   const getContext = useCallback(async () => {
     if (!activeFolder) return []
@@ -56,8 +65,10 @@ export function useFolder() {
   const updateMemory = useCallback(async (newMemory: string) => {
     if (!activeFolder) return false
     setActiveFolder(prev => prev ? { ...prev, memory: newMemory } : null)
-    return window.foldermind.updateMemory(activeFolder.path, newMemory)
-  }, [activeFolder])
+    const ok = await window.foldermind.updateMemory(activeFolder.path, newMemory)
+    if (ok && user) syncMemory(user, activeFolder.path, newMemory).catch(console.warn)
+    return ok
+  }, [activeFolder, user])
 
   // Watch for file changes
   useEffect(() => {
