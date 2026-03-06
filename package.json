@@ -22,24 +22,50 @@
     "@vitejs/plugin-react": "^4.3.1",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
+    "electron-icon-builder": "^2.0.1",
     "electron-vite": "^2.3.0",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
     "typescript": "^5.5.3",
     "vite": "^5.3.4"
   },
   "build": {
     "appId": "com.omohaSolutions.foldermind",
     "productName": "FolderMind",
+    "copyright": "© 2026 Omoha Solutions",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build-assets"
     },
     "files": [
       "out/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "FolderMind-Setup-${version}.exe",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "build-assets/icon.ico",
+      "uninstallerIcon": "build-assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FolderMind",
+      "license": "build-assets/LICENSE.txt"
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "artifactName": "FolderMind-${version}.dmg"
     }
   }
 }
