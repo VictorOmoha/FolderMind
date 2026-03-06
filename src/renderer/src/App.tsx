@@ -46,10 +46,19 @@ export default function App() {
     return true
   }, [canSendAI, trackAICall])
 
-  const handleUpgrade = () => {
-    // Opens Stripe checkout in external browser
-    const url = 'https://buy.stripe.com/YOUR_STRIPE_PAYMENT_LINK'
-    window.open(url, '_blank')
+  const handleUpgrade = async () => {
+    if (!user) return
+    try {
+      const res = await fetch('https://createcheckoutsession-n7hgfyuk2q-uc.a.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, email: user.email, plan: 'pro' }),
+      })
+      const { url } = await res.json()
+      if (url) window.open(url, '_blank')
+    } catch (err) {
+      console.error('Checkout failed:', err)
+    }
     setUpgradeReason(null)
   }
 

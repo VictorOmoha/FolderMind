@@ -4,6 +4,7 @@ out
 dist-electron
 release
 .env
+functions/.env
 *.local
 .DS_Store
 Thumbs.db
