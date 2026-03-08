@@ -5,7 +5,7 @@
   "author": "Omoha Solutions",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev -- --no-sandbox",
     "build": "electron-vite build && electron-builder",
     "preview": "electron-vite preview",
     "lint": "eslint src --ext .ts,.tsx"
