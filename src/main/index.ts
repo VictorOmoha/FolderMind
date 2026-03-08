@@ -6,11 +6,12 @@ import * as http from 'http'
 import { lookup } from 'mime-types'
 import chokidar from 'chokidar'
 import { OpenAI } from 'openai'
-import { exec } from 'child_process'
+import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
 import { setApiKey, hasApiKey, runAgentLoop, updateMemoryAgent, extractStructuredMemory } from './agent'
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 try {
   require('dotenv').config({ path: join(process.cwd(), '.env') })
@@ -48,6 +49,28 @@ interface FolderBriefing { summary: string; fileCount: number; topFiles: string[
 interface FolderChangeEvent { event: string; filePath: string; ts: number }
 
 const IGNORED_DIRS = new Set(['.foldermind', '.git', 'node_modules', 'dist', 'out', 'release'])
+
+// ── Named limits ──────────────────────────────────────────────────────────────
+const MAX_CHAT_HISTORY = 100
+const MAX_TASK_RUNS = 10
+const MAX_PLAN_SNAPSHOTS = 20
+const MAX_ACTIVITY_LOG = 60
+const MAX_TRACE_ENTRIES = 50
+const MAX_FOLDER_CHANGE_LOG = 50
+const MAX_RECENT_CHANGES = 10
+
+// ── Rate limiter (max 10 AI calls per minute) ────────────────────────────────
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX_CALLS = 10
+const aiCallLog: number[] = []
+function isRateLimited(): boolean {
+  const now = Date.now()
+  const cutoff = now - RATE_LIMIT_WINDOW_MS
+  while (aiCallLog.length > 0 && aiCallLog[0] < cutoff) aiCallLog.shift()
+  if (aiCallLog.length >= RATE_LIMIT_MAX_CALLS) return true
+  aiCallLog.push(now)
+  return false
+}
 let localPort = 0
 function startLocalServer(): Promise<number> { return new Promise((resolve) => { const rendererDir = join(__dirname, '../renderer'); const server = http.createServer((req, res) => { const urlPath = req.url === '/' || !req.url ? '/index.html' : req.url!; const filePath = join(rendererDir, urlPath.split('?')[0]); try { const mimeType = (lookup(filePath) || 'text/plain') as string; res.writeHead(200, { 'Content-Type': mimeType }); createReadStream(filePath).pipe(res) } catch { res.writeHead(200, { 'Content-Type': 'text/html' }); createReadStream(join(rendererDir, 'index.html')).pipe(res) } }); server.listen(0, '127.0.0.1', () => { localPort = (server.address() as { port: number }).port; resolve(localPort) }) }) }
 
@@ -70,8 +93,8 @@ function loadStructuredMemory(folderPath: string): StructuredMemory { const path
 function flattenStructuredMemory(memory: StructuredMemory): string { return ['# Project Memory', '', memory.project.trim(), '', '# Decisions', '', memory.decisions.trim(), '', '# Preferences', '', memory.preferences.trim(), '', '# Tasks', '', memory.tasks.items.length ? memory.tasks.items.map((item) => `- [${item.status === 'done' ? 'x' : ' '}] ${item.text}`).join('\n') : '_None yet._'].join('\n') }
 function writeLegacyMemorySnapshot(folderPath: string, memory: StructuredMemory) { writeFileSync(getMemoryPaths(folderPath).legacy, flattenStructuredMemory(memory), 'utf-8') }
 function persistStructuredMemory(folderPath: string, memory: StructuredMemory) { const paths = getMemoryPaths(folderPath); if (!existsSync(paths.dir)) mkdirSync(paths.dir, { recursive: true }); const normalized = { ...memory, tasks: { items: withTaskIds(memory.tasks.items) } }; writeFileSync(paths.project, normalized.project, 'utf-8'); writeFileSync(paths.decisions, normalized.decisions, 'utf-8'); writeFileSync(paths.preferences, normalized.preferences, 'utf-8'); writeFileSync(paths.tasks, JSON.stringify(normalized.tasks, null, 2), 'utf-8'); writeLegacyMemorySnapshot(folderPath, normalized) }
-function getChatHistory(folderPath: string): ChatMessage[] { const path = getMemoryPaths(folderPath).chat; if (!existsSync(path)) return []; try { const parsed = JSON.parse(readFileSync(path, 'utf-8')); return Array.isArray(parsed.messages) ? parsed.messages.filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string').slice(-100) : [] } catch { return [] } }
-function persistChatHistory(folderPath: string, messages: ChatMessage[]) { const paths = getMemoryPaths(folderPath); if (!existsSync(paths.dir)) mkdirSync(paths.dir, { recursive: true }); writeFileSync(paths.chat, JSON.stringify({ messages: messages.slice(-100) }, null, 2), 'utf-8') }
+function getChatHistory(folderPath: string): ChatMessage[] { const path = getMemoryPaths(folderPath).chat; if (!existsSync(path)) return []; try { const parsed = JSON.parse(readFileSync(path, 'utf-8')); return Array.isArray(parsed.messages) ? parsed.messages.filter((msg) => msg && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string').slice(-MAX_CHAT_HISTORY) : [] } catch { return [] } }
+function persistChatHistory(folderPath: string, messages: ChatMessage[]) { const paths = getMemoryPaths(folderPath); if (!existsSync(paths.dir)) mkdirSync(paths.dir, { recursive: true }); writeFileSync(paths.chat, JSON.stringify({ messages: messages.slice(-MAX_CHAT_HISTORY) }, null, 2), 'utf-8') }
 function summarizeDecisionLines(decisions: string) { return decisions.split(/\r?\n/).map(line => line.replace(/^[-*#\s]+/, '').trim()).filter(Boolean).slice(0, 4) }
 function getTasks(folderPath: string) { return loadStructuredMemory(folderPath).tasks.items }
 function addTask(folderPath: string, text: string) { const memory = loadStructuredMemory(folderPath); memory.tasks.items.unshift({ id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text, status: 'open', runs: [] }); persistStructuredMemory(folderPath, memory); return memory.tasks.items }
@@ -83,7 +106,7 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
   const task = memory.tasks.items.find(t => t.id === taskId)
   if (!task) throw new Error('Task not found')
   const run: TaskRun = { id: `run-${Date.now()}`, startedAt: Date.now(), status: 'running', filesTouched: [], commands: [], trace: [], planSnapshots: [], activityLog: [] }
-  task.runs = [run, ...(task.runs || [])].slice(0, 10)
+  task.runs = [run, ...(task.runs || [])].slice(0, MAX_TASK_RUNS)
   persistStructuredMemory(folderPath, memory)
   try {
     const finalResponse = await runAgentLoop(`Work on this task: ${task.text}\n\nInspect relevant files, make the necessary changes safely, and summarize the result.`, [], { folderPath, memory: flattenStructuredMemory(memory), profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => {
@@ -92,7 +115,7 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
       const currentTask = current.tasks.items.find(t => t.id === taskId)
       const currentRun = currentTask?.runs?.find(r => r.id === run.id)
       if (!currentTask || !currentRun) return
-      currentRun.planSnapshots = [...(currentRun.planSnapshots || []), { goal: plan.goal, steps: plan.steps, ts: Date.now() }].slice(-20)
+      currentRun.planSnapshots = [...(currentRun.planSnapshots || []), { goal: plan.goal, steps: plan.steps, ts: Date.now() }].slice(-MAX_PLAN_SNAPSHOTS)
       persistStructuredMemory(folderPath, current)
     }, onActivity: (entry) => {
       event.sender.send('agent:activity', entry)
@@ -100,14 +123,14 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
       const currentTask = current.tasks.items.find(t => t.id === taskId)
       const currentRun = currentTask?.runs?.find(r => r.id === run.id)
       if (!currentTask || !currentRun) return
-      currentRun.activityLog = [...(currentRun.activityLog || []), entry].slice(-60)
+      currentRun.activityLog = [...(currentRun.activityLog || []), entry].slice(-MAX_ACTIVITY_LOG)
       persistStructuredMemory(folderPath, current)
     }, onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }), onTrace: (trace) => {
       const current = loadStructuredMemory(folderPath)
       const currentTask = current.tasks.items.find(t => t.id === taskId)
       const currentRun = currentTask?.runs?.find(r => r.id === run.id)
       if (!currentTask || !currentRun) return
-      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts, diff: trace.diff }].slice(-50)
+      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts, diff: trace.diff }].slice(-MAX_TRACE_ENTRIES)
       if (trace.file) currentRun.filesTouched = Array.from(new Set([...(currentRun.filesTouched || []), trace.file]))
       if (trace.command) currentRun.commands = Array.from(new Set([...(currentRun.commands || []), trace.command]))
       persistStructuredMemory(folderPath, current)
@@ -138,8 +161,8 @@ async function collectOnboarding(projectName: string): Promise<Pick<AgentConfig,
 
 function createWindow(): void { mainWindow = new BrowserWindow({ width: 1320, height: 860, minWidth: 1040, minHeight: 700, backgroundColor: '#0f0f0f', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: false }, title: 'FolderMind' }); if (process.env['ELECTRON_RENDERER_URL']) { mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']); mainWindow.webContents.openDevTools() } else { mainWindow.loadURL(`http://127.0.0.1:${localPort}/index.html`) } mainWindow.on('closed', () => { mainWindow = null }) }
 async function seedAgent(folderPath: string, projectName: string): Promise<void> { const agentDir = join(folderPath, AGENT_DIR); if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true }); const agentConfig = getAgentConfigPath(folderPath); if (!existsSync(agentConfig)) { const onboarding = await collectOnboarding(projectName); writeFileSync(agentConfig, JSON.stringify({ name: projectName, created: new Date().toISOString(), model: 'gpt-4o', tone: 'direct, practical, helpful', archetype: onboarding.archetype, goals: onboarding.goals, constraints: onboarding.constraints, guardrails: { requireApprovalForDangerousCommands: true, requireApprovalForFileChanges: true } }, null, 2)) } ensureStructuredMemory(folderPath, projectName) }
-function pushFolderChange(folderPath: string, event: string, filePath: string) { const existing = folderChangeLog.get(folderPath) || []; folderChangeLog.set(folderPath, [...existing, { event, filePath, ts: Date.now() }].slice(-50)) }
-function getRecentFolderChanges(folderPath: string) { return (folderChangeLog.get(folderPath) || []).slice(-10).reverse() }
+function pushFolderChange(folderPath: string, event: string, filePath: string) { const existing = folderChangeLog.get(folderPath) || []; folderChangeLog.set(folderPath, [...existing, { event, filePath, ts: Date.now() }].slice(-MAX_FOLDER_CHANGE_LOG)) }
+function getRecentFolderChanges(folderPath: string) { return (folderChangeLog.get(folderPath) || []).slice(-MAX_RECENT_CHANGES).reverse() }
 function scanFolder(folderPath: string) { const files: string[] = []; const walk = (dir: string) => { for (const item of readdirSync(dir)) { if (IGNORED_DIRS.has(item)) continue; const full = join(dir, item); let stat; try { stat = statSync(full) } catch { continue } if (stat.isDirectory()) walk(full); else files.push(relative(folderPath, full)) } }; walk(folderPath); return files }
 function heuristicSuggestions(files: string[], changes: FolderChangeEvent[], config?: AgentConfig, git?: GitStatus) { const suggestions: string[] = []; const lower = files.map(f => f.toLowerCase()); if (config?.archetype === 'codebase') suggestions.push('Ask FolderMind for an implementation plan, diff review, or codebase audit.'); if (config?.archetype === 'research') suggestions.push('Ask FolderMind to synthesize findings, extract insights, or identify knowledge gaps.'); if (config?.archetype === 'content') suggestions.push('Ask FolderMind to draft, revise, or repurpose content in the folder’s voice.'); if (config?.archetype === 'operations') suggestions.push('Ask FolderMind to summarize status, update trackers, or standardize workflows.'); if (lower.some(f => f.endsWith('.csv'))) suggestions.push('New or existing CSV data detected — ask FolderMind to profile the data or generate a report.'); if (lower.some(f => f.includes('readme')) && changes.some(c => /src|package|main|app/i.test(c.filePath))) suggestions.push('Code files changed recently — review whether README or docs should be updated.'); if (changes.some(c => /package\.json|requirements|pnpm-lock|package-lock/i.test(c.filePath))) suggestions.push('Dependency-related files changed — consider checking install/build health.'); if (changes.length >= 3) suggestions.push('Several files changed recently — generate a “what changed” summary before continuing work.'); if (git?.isRepo && git.changedFiles.length > 0) suggestions.push('Git changes detected — ask FolderMind to summarize diffs or draft a commit message.'); if (suggestions.length === 0) suggestions.push('Ask FolderMind for a folder audit, next-step plan, or implementation pass.'); return [...new Set(suggestions)].slice(0, 5) }
 async function generateFolderBriefing(folderPath: string, folderName: string): Promise<FolderBriefing> { const files = scanFolder(folderPath); const topFiles = files.slice(0, 8); const recentChanges = getRecentFolderChanges(folderPath).map(change => `${change.event}: ${relative(folderPath, change.filePath)}`); const config = readAgentConfig(folderPath); const structured = loadStructuredMemory(folderPath); const git = await getGitStatus(folderPath); const suggestions = heuristicSuggestions(files, getRecentFolderChanges(folderPath), config, git); const memory = flattenStructuredMemory(structured); const openTasks = structured.tasks.items.filter(item => item.status === 'open').map(item => item.text).slice(0, 4); const keyDecisions = summarizeDecisionLines(structured.decisions); const ai = getOpenAI(); let summary = `${folderName} is configured as a ${config.archetype} workspace with ${files.length} files in scope.`; if (ai) { try { const res = await ai.chat.completions.create({ model: 'gpt-4o', temperature: 0.2, messages: [{ role: 'system', content: 'You generate concise folder briefings. Return a short paragraph that explains what the folder likely is, what matters now, and what the user should consider next.' }, { role: 'user', content: `Folder: ${folderName}
@@ -183,7 +206,7 @@ ipcMain.handle('tasks:update', async (_event, folderPath: string, taskId: string
 ipcMain.handle('tasks:delete', async (_event, folderPath: string, taskId: string) => deleteTask(folderPath, taskId))
 ipcMain.handle('tasks:run', async (event, folderPath: string, taskId: string) => runTaskExecution(folderPath, taskId, event))
 
-ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: any[], memory: string) => { try { const finalResponse = await runAgentLoop(message, history, { folderPath, memory, profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory = [...getChatHistory(folderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(folderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(folderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(folderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(folderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(folderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: any) { console.error('Agent chat error:', e); return `⚠️ Error: ${e.message}` } })
+ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: any[], memory: string) => { if (isRateLimited()) return '⚠️ Rate limit: too many AI calls. Please wait a moment before sending another message.'; try { const finalResponse = await runAgentLoop(message, history, { folderPath, memory, profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory = [...getChatHistory(folderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(folderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(folderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(folderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(folderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(folderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: any) { console.error('Agent chat error:', e); return `⚠️ Error: ${e.message}` } })
 
 ipcMain.handle('agent:approve', (_e, approvalId: string, approved: boolean) => { const resolver = pendingApprovals.get(approvalId); if (resolver) { resolver(approved); pendingApprovals.delete(approvalId); return true } return false })
 ipcMain.handle('agent:setKey', (_e, key: string) => { setApiKey(key); return true })
@@ -232,54 +255,69 @@ ipcMain.handle('voice:speak', async (_e, text: string) => {
 ipcMain.handle('voice:getSpeechResult', async (_e, jobId: string) => voiceSpeech.get(jobId) || { status: 'failed', error: 'Voice speech job not found.' })
 ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string) => shell.openPath(target ? join(folderPath, target) : folderPath))
 
-// ── Git operations ──────────────────────────────────────────────────────────
-const gitShell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
+// ── Memory read/write ────────────────────────────────────────────────────────
+ipcMain.handle('memory:read', (_e, folderPath: string) => {
+  const structured = loadStructuredMemory(folderPath)
+  return { project: structured.project, decisions: structured.decisions, preferences: structured.preferences }
+})
+ipcMain.handle('memory:write', (_e, folderPath: string, updates: { project?: string; decisions?: string; preferences?: string }) => {
+  const current = loadStructuredMemory(folderPath)
+  const updated: StructuredMemory = {
+    ...current,
+    project: updates.project ?? current.project,
+    decisions: updates.decisions ?? current.decisions,
+    preferences: updates.preferences ?? current.preferences,
+  }
+  persistStructuredMemory(folderPath, updated)
+  return true
+})
+
+// ── Git operations (use execFile to prevent shell injection) ─────────────────
 
 ipcMain.handle('git:stageFile', async (_e, folderPath: string, filepath: string) => {
   try {
-    const { stdout, stderr } = await execAsync(`git add -- "${filepath.replace(/"/g, '\\"')}"`, { cwd: folderPath, shell: gitShell })
+    const { stdout, stderr } = await execFileAsync('git', ['add', '--', filepath], { cwd: folderPath })
     return { ok: true, output: (stdout + stderr).trim() }
   } catch (e: any) { return { ok: false, output: e.message } }
 })
 
 ipcMain.handle('git:unstageFile', async (_e, folderPath: string, filepath: string) => {
   try {
-    const { stdout, stderr } = await execAsync(`git restore --staged -- "${filepath.replace(/"/g, '\\"')}"`, { cwd: folderPath, shell: gitShell })
+    const { stdout, stderr } = await execFileAsync('git', ['restore', '--staged', '--', filepath], { cwd: folderPath })
     return { ok: true, output: (stdout + stderr).trim() }
   } catch (e: any) { return { ok: false, output: e.message } }
 })
 
 ipcMain.handle('git:stageAll', async (_e, folderPath: string) => {
   try {
-    const { stdout, stderr } = await execAsync('git add .', { cwd: folderPath, shell: gitShell })
+    const { stdout, stderr } = await execFileAsync('git', ['add', '.'], { cwd: folderPath })
     return { ok: true, output: (stdout + stderr).trim() }
   } catch (e: any) { return { ok: false, output: e.message } }
 })
 
 ipcMain.handle('git:commit', async (_e, folderPath: string, message: string) => {
   try {
-    const safe = message.replace(/"/g, '\\"')
-    const { stdout, stderr } = await execAsync(`git commit -m "${safe}"`, { cwd: folderPath, shell: gitShell })
+    const { stdout, stderr } = await execFileAsync('git', ['commit', '-m', message], { cwd: folderPath })
     return { ok: true, output: (stdout + stderr).trim() }
   } catch (e: any) { return { ok: false, output: e.message } }
 })
 
 ipcMain.handle('git:push', async (_e, folderPath: string) => {
   try {
-    const { stdout, stderr } = await execAsync('git push', { cwd: folderPath, shell: gitShell, timeout: 30000 })
+    const { stdout, stderr } = await execFileAsync('git', ['push'], { cwd: folderPath, timeout: 30000 })
     return { ok: true, output: (stdout + stderr).trim() }
   } catch (e: any) { return { ok: false, output: e.message } }
 })
 
 ipcMain.handle('git:getFileDiff', async (_e, folderPath: string, filepath: string, staged: boolean) => {
   try {
-    const flag = staged ? '--cached' : ''
-    const safe = filepath.replace(/"/g, '\\"')
-    const { stdout } = await execAsync(`git diff ${flag} -- "${safe}"`, { cwd: folderPath, shell: gitShell })
+    const args = staged ? ['diff', '--cached', '--', filepath] : ['diff', '--', filepath]
+    const { stdout } = await execFileAsync('git', args, { cwd: folderPath })
     return { ok: true, diff: stdout || '(no diff output)' }
   } catch (e: any) { return { ok: false, diff: '' } }
 })
 
-app.whenReady().then(async () => { await startLocalServer(); session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true)); session.defaultSession.setPermissionCheckHandler(() => true); createWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() }) })
+const ALLOWED_PERMISSIONS = new Set(['media', 'audioCapture', 'microphone'])
+app.whenReady().then(async () => { await startLocalServer(); session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => callback(ALLOWED_PERMISSIONS.has(permission))); session.defaultSession.setPermissionCheckHandler((_wc, permission) => ALLOWED_PERMISSIONS.has(permission)); createWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() }) })
 app.on('window-all-closed', () => { activeWatcher?.close(); if (process.platform !== 'darwin') app.quit() })
 process.on('uncaughtException', (err) => { console.error('[FolderMind] Uncaught exception:', err) })

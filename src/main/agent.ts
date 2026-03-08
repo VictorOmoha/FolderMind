@@ -95,6 +95,22 @@ const DANGEROUS_COMMAND_PATTERNS = [
   /\bcurl\b/i,
   /\bwget\b/i,
   /\binvoke-webrequest\b/i,
+  // Shell metacharacters that enable injection / chaining
+  /[|;&`]/,
+  // Command substitution
+  /\$\(/,
+  // Privilege escalation
+  /\bsudo\b/i,
+  /\bsu\s/i,
+  // Permission / ownership changes
+  /\bchmod\b/i,
+  /\bchown\b/i,
+  // Output redirection (overwrite)
+  /(?<![<])[>]/,
+  // Disk / partition tools
+  /\bdd\b/i,
+  /\bmkfs\b/i,
+  /\bfdisk\b/i,
 ]
 
 function safeJoin(folderPath: string, target: string) {

@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('foldermind', {
   deleteTask: (folderPath: string, taskId: string) => ipcRenderer.invoke('tasks:delete', folderPath, taskId),
   runTask: (folderPath: string, taskId: string) => ipcRenderer.invoke('tasks:run', folderPath, taskId),
   openInExplorer: (folderPath: string, target: string) => ipcRenderer.invoke('folder:openInExplorer', folderPath, target),
+  readMemory: (folderPath: string) => ipcRenderer.invoke('memory:read', folderPath),
+  writeMemory: (folderPath: string, updates: { project?: string; decisions?: string; preferences?: string }) => ipcRenderer.invoke('memory:write', folderPath, updates),
 
   setApiKey: (key: string) => ipcRenderer.invoke('agent:setKey', key),
   getAgentStatus: () => ipcRenderer.invoke('agent:status'),

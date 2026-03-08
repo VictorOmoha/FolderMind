@@ -27,6 +27,13 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
+  // Memory editor state
+  const [memoryProject, setMemoryProject] = useState('')
+  const [memoryDecisions, setMemoryDecisions] = useState('')
+  const [memoryPreferences, setMemoryPreferences] = useState('')
+  const [memorySaving, setMemorySaving] = useState(false)
+  const [memoryMessage, setMemoryMessage] = useState<string | null>(null)
+
   useEffect(() => {
     if (!agentConfig) return
     setTone(agentConfig.tone || 'direct, practical, helpful')
@@ -35,6 +42,16 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
     setConstraints((agentConfig.constraints || []).join('\n'))
     setSaveMessage(null)
   }, [agentConfig, open])
+
+  useEffect(() => {
+    if (!open || !folderPath) return
+    setMemoryMessage(null)
+    window.foldermind.readMemory(folderPath).then((mem: { project: string; decisions: string; preferences: string }) => {
+      setMemoryProject(mem.project)
+      setMemoryDecisions(mem.decisions)
+      setMemoryPreferences(mem.preferences)
+    }).catch(() => {/* non-critical */})
+  }, [open, folderPath])
 
   if (!open) return null
 
@@ -55,6 +72,23 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
       setSaveMessage(error?.message || 'Unable to save settings.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveMemory = async () => {
+    setMemorySaving(true)
+    setMemoryMessage(null)
+    try {
+      await window.foldermind.writeMemory(folderPath, {
+        project: memoryProject,
+        decisions: memoryDecisions,
+        preferences: memoryPreferences,
+      })
+      setMemoryMessage('Memory saved.')
+    } catch (error: any) {
+      setMemoryMessage(error?.message || 'Unable to save memory.')
+    } finally {
+      setMemorySaving(false)
     }
   }
 
@@ -108,6 +142,31 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
           {saveMessage && <span className="settings-status-message">{saveMessage}</span>}
           <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
+        </div>
+
+        <div className="settings-divider" />
+
+        <div className="settings-grid">
+          <section className="settings-section settings-section-full">
+            <h3>Agent Memory</h3>
+            <p className="settings-help">Edit the agent's persistent memory directly. Changes take effect immediately for future conversations.</p>
+
+            <label className="settings-label">Project Knowledge</label>
+            <textarea className="settings-textarea" rows={6} value={memoryProject} onChange={(e) => setMemoryProject(e.target.value)} placeholder="What the agent knows about this project..." />
+
+            <label className="settings-label">Decisions</label>
+            <textarea className="settings-textarea" rows={4} value={memoryDecisions} onChange={(e) => setMemoryDecisions(e.target.value)} placeholder="Key decisions recorded by the agent..." />
+
+            <label className="settings-label">Preferences</label>
+            <textarea className="settings-textarea" rows={4} value={memoryPreferences} onChange={(e) => setMemoryPreferences(e.target.value)} placeholder="User preferences the agent has learned..." />
+
+            <div className="settings-actions" style={{ marginTop: '12px' }}>
+              {memoryMessage && <span className="settings-status-message">{memoryMessage}</span>}
+              <button className="btn-primary" onClick={handleSaveMemory} disabled={memorySaving}>
+                {memorySaving ? 'Saving...' : 'Save Memory'}
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </div>

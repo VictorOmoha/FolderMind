@@ -758,6 +758,14 @@ body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidde
   font-size: 12px;
   color: #d7c37a;
 }
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+.settings-section-full {
+  grid-column: 1 / -1;
+}
 
 /* ──────────────────────────────────────────────
    Git Panel
