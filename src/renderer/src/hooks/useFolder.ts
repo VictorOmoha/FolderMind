@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { User } from 'firebase/auth'
-import { syncFolder, syncMemory } from '../lib/sync'
+import type { FolderBriefing, GitStatus, TaskItem } from '../../../src/vite-env'
 
 export interface SmartFolder {
   path: string
@@ -9,83 +8,123 @@ export interface SmartFolder {
   agentConfig: Record<string, unknown>
 }
 
-declare global {
-  interface Window {
-    foldermind: {
-      createFolder: () => Promise<SmartFolder | null>
-      openFolder: () => Promise<SmartFolder | null>
-      getFolderContext: (path: string) => Promise<{ name: string; content: string }[]>
-      writeFile: (folderPath: string, fileName: string, content: string) => Promise<boolean>
-      updateMemory: (folderPath: string, memory: string) => Promise<boolean>
-      onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => () => void
-      testMic: () => Promise<{ ok: boolean; tracks: number }>
-    }
-  }
-}
-
-export function useFolder(user: User | null) {
+export function useFolder() {
   const [activeFolder, setActiveFolder] = useState<SmartFolder | null>(null)
   const [recentFolders, setRecentFolders] = useState<SmartFolder[]>([])
   const [fileChanged, setFileChanged] = useState(0)
+  const [recentChanges, setRecentChanges] = useState<string[]>([])
+  const [briefing, setBriefing] = useState<FolderBriefing | null>(null)
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null)
+  const [tasks, setTasks] = useState<TaskItem[]>([])
+  const [briefingLoading, setBriefingLoading] = useState(false)
+  const [briefingError, setBriefingError] = useState<string | null>(null)
 
-  const addToRecent = (folder: SmartFolder) => {
-    setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
-  }
+  const loadBriefing = useCallback(async (folder: SmartFolder) => {
+    setBriefingLoading(true)
+    setBriefingError(null)
+    try {
+      const [nextBriefing, nextGit, nextTasks] = await Promise.all([
+        window.foldermind.getBriefing(folder.path, folder.name),
+        window.foldermind.getGitStatus(folder.path),
+        window.foldermind.listTasks(folder.path),
+      ])
+      setBriefing(nextBriefing)
+      setGitStatus(nextGit)
+      setTasks(nextTasks)
+    } catch (error: any) {
+      setBriefingError(error?.message || 'Unable to load folder intelligence.')
+    } finally {
+      setBriefingLoading(false)
+    }
+  }, [])
+
+  const activateFolder = useCallback(async (folder: SmartFolder) => {
+    setActiveFolder(folder)
+    setRecentChanges([])
+    await loadBriefing(folder)
+  }, [loadBriefing])
 
   const createFolder = useCallback(async () => {
     const folder = await window.foldermind.createFolder()
     if (folder) {
-      setActiveFolder(folder)
-      addToRecent(folder)
-      if (user) syncFolder(user, folder).catch(console.warn)
+      await activateFolder(folder)
+      setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
     }
     return folder
-  }, [user])
+  }, [activateFolder])
 
   const openFolder = useCallback(async () => {
     const folder = await window.foldermind.openFolder()
     if (folder) {
-      setActiveFolder(folder)
-      addToRecent(folder)
-      if (user) syncFolder(user, folder).catch(console.warn)
+      await activateFolder(folder)
+      setRecentFolders(prev => [folder, ...prev.filter(f => f.path !== folder.path)].slice(0, 10))
     }
     return folder
-  }, [user])
-
-  const getContext = useCallback(async () => {
-    if (!activeFolder) return []
-    return window.foldermind.getFolderContext(activeFolder.path)
-  }, [activeFolder])
-
-  const writeFile = useCallback(async (fileName: string, content: string) => {
-    if (!activeFolder) return false
-    return window.foldermind.writeFile(activeFolder.path, fileName, content)
-  }, [activeFolder])
+  }, [activateFolder])
 
   const updateMemory = useCallback(async (newMemory: string) => {
-    if (!activeFolder) return false
     setActiveFolder(prev => prev ? { ...prev, memory: newMemory } : null)
-    const ok = await window.foldermind.updateMemory(activeFolder.path, newMemory)
-    if (ok && user) syncMemory(user, activeFolder.path, newMemory).catch(console.warn)
-    return ok
-  }, [activeFolder, user])
+    return true
+  }, [])
 
-  // Watch for file changes
+  const refreshTasks = useCallback(async () => {
+    if (!activeFolder) return
+    setTasks(await window.foldermind.listTasks(activeFolder.path))
+  }, [activeFolder])
+
+  const addTask = useCallback(async (text: string) => {
+    if (!activeFolder) return
+    setTasks(await window.foldermind.addTask(activeFolder.path, text))
+  }, [activeFolder])
+
+  const updateTask = useCallback(async (taskId: string, updates: { text?: string; status?: 'open' | 'done' }) => {
+    if (!activeFolder) return
+    setTasks(await window.foldermind.updateTask(activeFolder.path, taskId, updates))
+  }, [activeFolder])
+
+  const deleteTask = useCallback(async (taskId: string) => {
+    if (!activeFolder) return
+    setTasks(await window.foldermind.deleteTask(activeFolder.path, taskId))
+  }, [activeFolder])
+
+  const runTask = useCallback(async (taskId: string) => {
+    if (!activeFolder) return null
+    const result = await window.foldermind.runTask(activeFolder.path, taskId)
+    setTasks(result.tasks)
+    return result.response
+  }, [activeFolder])
+
   useEffect(() => {
-    const unsub = window.foldermind?.onFolderChanged?.(() => {
+    const unsub = window.foldermind?.onFolderChanged?.((data) => {
       setFileChanged(n => n + 1)
+      if (!activeFolder) return
+      if (!data.filePath.startsWith(activeFolder.path)) return
+      const rel = data.filePath.replace(activeFolder.path, '').replace(/^[/\\]/, '')
+      const entry = `${data.event}: ${rel}`
+      setRecentChanges(prev => [entry, ...prev].slice(0, 8))
     })
     return unsub
-  }, [])
+  }, [activeFolder])
 
   return {
     activeFolder,
     recentFolders,
     fileChanged,
+    recentChanges,
+    briefing,
+    gitStatus,
+    tasks,
+    briefingLoading,
+    briefingError,
     createFolder,
     openFolder,
-    getContext,
-    writeFile,
     updateMemory,
+    addTask,
+    updateTask,
+    deleteTask,
+    runTask,
+    refreshTasks,
+    setActiveFolder: activateFolder,
+    refreshBriefing: activeFolder ? () => loadBriefing(activeFolder) : undefined,
   }
 }

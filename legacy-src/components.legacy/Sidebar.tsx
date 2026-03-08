@@ -6,10 +6,9 @@ interface Props {
   onCreateFolder: () => void
   onOpenFolder: () => void
   onSelectFolder: (folder: SmartFolder) => void
-  onOpenSettings: () => void
 }
 
-export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFolder, onSelectFolder, onOpenSettings }: Props) {
+export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFolder, onSelectFolder }: Props) {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -19,7 +18,6 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
       <div className="sidebar-actions">
         <button className="btn-primary" onClick={onCreateFolder}>+ New Smart Folder</button>
         <button className="btn-secondary" onClick={onOpenFolder}>Open Folder</button>
-        <button className="btn-secondary" onClick={onOpenSettings}>Settings</button>
       </div>
 
       {recentFolders.length > 0 && (
@@ -40,8 +38,7 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
       )}
 
       <div className="sidebar-footer">
-        {activeFolder ? <div className="sidebar-active-folder"><span className="sidebar-label">Active Folder</span><span className="sidebar-active-name">{activeFolder.name}</span><span className="sidebar-active-path" title={activeFolder.path}>{activeFolder.path}</span></div> : <div className="sidebar-empty-hint">Open a folder to activate memory, briefing, tasks, and agent tools.</div>}
-        <span className="version">v0.1.0 — Local-first v1</span>
+        <span className="version">v0.1.0 — MVP</span>
       </div>
     </aside>
   )

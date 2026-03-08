@@ -1,323 +1,357 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { streamChat, type Message, type FileContext, type ToolCall } from '../lib/agent'
+import type { TaskItem, ChatMessage } from '../../../src/vite-env'
+import type { Message, PlanState, ActivityEntry, ApprovalRequest } from './chatPanelTypes'
+import { ChatEmptyState } from './ChatEmptyState'
+import { ChatMessageList } from './ChatMessageList'
+import { TaskSidebar } from './TaskSidebar'
+import { ApprovalCard } from './ApprovalCard'
 
 interface Props {
-  folderName: string
   folderPath: string
+  folderName: string
   memory: string
+  tasks: TaskItem[]
+  hasApiKey: boolean
   onMemoryUpdate: (memory: string) => void
-  onFileCreated: (name: string, content: string) => void
-  getContext: () => Promise<FileContext[]>
-  onBeforeSend?: () => boolean // returns false if blocked (limit hit)
+  onRunTask: (task: TaskItem) => Promise<string | null>
+  onAddTask: (text: string) => void
+  onToggleTask: (task: TaskItem) => void
+  onDeleteTask: (taskId: string) => void
 }
 
-const OPENAI_KEY = import.meta.env.VITE_OPENAI_API_KEY
-
-async function speakWithOpenAI(text: string): Promise<void> {
-  const snippet = text.length > 250 ? text.slice(0, 247) + '...' : text
-  try {
-    const res = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_KEY}` },
-      body: JSON.stringify({ model: 'tts-1', input: snippet, voice: 'nova', response_format: 'mp3' }),
-    })
-    if (!res.ok) return
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const audio = new Audio(url)
-    audio.onended = () => URL.revokeObjectURL(url)
-    audio.play()
-  } catch { /* silent fail */ }
-}
-
-async function transcribeAudio(blob: Blob): Promise<string> {
-  const form = new FormData()
-  form.append('file', blob, 'recording.webm')
-  form.append('model', 'whisper-1')
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${OPENAI_KEY}` },
-    body: form,
-  })
-  const data = await res.json()
-  return data.text ?? ''
-}
-
-export function ChatPanel({ folderName, folderPath, memory, onMemoryUpdate, onFileCreated, getContext, onBeforeSend }: Props) {
+export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, onMemoryUpdate, onRunTask, onAddTask, onToggleTask, onDeleteTask }: Props) {
+  const [listening, setListening] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
+  const [taskInput, setTaskInput] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTaskText, setEditingTaskText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [streaming, setStreaming] = useState('')
-  const [recording, setRecording] = useState(false)
-  const [transcribing, setTranscribing] = useState(false)
-  const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const [toolStatus, setToolStatus] = useState('')
+  const [streamingContent, setStreamingContent] = useState('')
+  const [currentTool, setCurrentTool] = useState<{ name: string, args: unknown } | null>(null)
+  const [plan, setPlan] = useState<PlanState | null>(null)
+  const [activity, setActivity] = useState<ActivityEntry[]>([])
+  const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+  const [voiceBusy, setVoiceBusy] = useState(false)
+  const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(true)
+  const [voiceAutoMode, setVoiceAutoMode] = useState(true)
+  const recognitionRef = useRef<any>(null)
+  const voiceAutoRestartRef = useRef(false)
+  const voicePendingRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const messagesRef = useRef<Message[]>([])
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const silenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => { messagesRef.current = messages }, [messages])
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, streaming])
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, streamingContent, currentTool, activity])
 
-  // ── Tool execution ────────────────────────────────────────────────────────
-  const handleToolCall = useCallback(async (tool: ToolCall): Promise<string> => {
-    setToolStatus(`⚙️ ${tool.name.replace(/_/g, ' ')}...`)
+  useEffect(() => {
+    setMessages([])
+    setHistoryLoaded(false)
+    setSelectedTaskId(null)
+    if (!folderPath) return
+    window.foldermind.getChatHistory(folderPath)
+      .then((history: ChatMessage[]) => {
+        setMessages(history.map((msg) => ({ role: msg.role, content: msg.content })))
+      })
+      .finally(() => setHistoryLoaded(true))
+  }, [folderPath])
 
-    try {
-      switch (tool.name) {
-        case 'create_file': {
-          await onFileCreated(tool.args.filename, tool.args.content)
-          return `✅ Created file: ${tool.args.filename}`
-        }
+  useEffect(() => {
+    const unsubToken = window.foldermind.onToken((token) => setStreamingContent(prev => prev + token))
+    const unsubToolCall = window.foldermind.onToolCall((data) => {
+      setStreamingContent(prev => {
+        if (prev) setMessages(m => [...m, { role: 'assistant', content: prev }])
+        return ''
+      })
+      setCurrentTool(data)
+    })
+    const unsubToolResult = window.foldermind.onToolResult((data) => {
+      setMessages(prev => [...prev, { role: 'tool', content: '', toolName: data.name, toolResult: data.result }])
+      setCurrentTool(null)
+    })
+    const unsubMemory = window.foldermind.onMemoryUpdated((newMem) => onMemoryUpdate(newMem))
+    const unsubPlan = window.foldermind.onPlan((data) => setPlan(data))
+    const unsubActivity = window.foldermind.onActivity((data) => setActivity(prev => [...prev.slice(-24), data]))
+    const unsubApproval = window.foldermind.onApprovalRequested((data) => setApprovalRequest(data))
 
-        case 'run_command': {
-          const result = await (window as unknown as { foldermind: { runCommand: (p: string, c: string) => Promise<string> } })
-            .foldermind.runCommand(folderPath, tool.args.command)
-          return result
-        }
+    return () => { unsubToken(); unsubToolCall(); unsubToolResult(); unsubMemory(); unsubPlan(); unsubActivity(); unsubApproval() }
+  }, [onMemoryUpdate])
 
-        case 'open_in_explorer': {
-          await (window as unknown as { foldermind: { openInExplorer: (p: string, t: string) => Promise<void> } })
-            .foldermind.openInExplorer(folderPath, tool.args.target)
-          return `✅ Opened ${tool.args.target} in Explorer`
-        }
-
-        case 'search_web': {
-          const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(tool.args.query)}&format=json&no_html=1`)
-          const data = await res.json()
-          return data.AbstractText || data.RelatedTopics?.[0]?.Text || 'No results found.'
-        }
-
-        case 'analyze_data': {
-          const files = await getContext()
-          const file = files.find(f => f.name === tool.args.filename)
-          if (!file) return `File ${tool.args.filename} not found`
-          return `Data loaded (${file.content.split('\n').length} rows). Analysis: ${tool.args.question}`
-        }
-
-        default:
-          return 'Tool not implemented'
-      }
-    } catch (e) {
-      return `Error: ${e}`
-    } finally {
-      setToolStatus('')
+  const stopVoiceLoop = useCallback(() => {
+    voiceAutoRestartRef.current = false
+    if (voicePendingRestartRef.current) {
+      clearTimeout(voicePendingRestartRef.current)
+      voicePendingRestartRef.current = null
     }
-  }, [folderPath, getContext, onFileCreated])
-
-  // ── Send message ──────────────────────────────────────────────────────────
-  const send = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return
-    if (onBeforeSend && !onBeforeSend()) return // blocked by usage limit
-
-    const userMsg: Message = { role: 'user', content: text }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setLoading(true)
-    setStreaming('')
-
-    try {
-      const files = await getContext()
-      const history = [...messagesRef.current, userMsg]
-      let streamedText = ''
-
-      const fullResponse = await streamChat(
-        history,
-        folderName,
-        memory,
-        files,
-        (token) => {
-          streamedText += token
-          setStreaming(streamedText)
-        },
-        handleToolCall,
-      )
-
-      setStreaming('')
-      setMessages(prev => [...prev, { role: 'assistant', content: fullResponse }])
-
-      if (voiceEnabled) speakWithOpenAI(fullResponse)
-
-      // Memory update every 6 messages
-      if (history.length % 6 === 0) {
-        streamChat(
-          [{ role: 'user', content: `Update project memory concisely. Current:\n${memory}\n\nReturn only the updated memory.md content.` }],
-          folderName, memory, [],
-          () => {},
-          async () => ''
-        ).then(onMemoryUpdate)
-      }
-    } catch (err) {
-      setStreaming('')
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${err}` }])
-    } finally {
-      setLoading(false)
+    if (recognitionRef.current && typeof recognitionRef.current.stop === 'function') {
+      try { recognitionRef.current.stop() } catch {}
     }
-  }, [loading, folderName, memory, getContext, handleToolCall, onMemoryUpdate, voiceEnabled])
-
-  // ── Mic ───────────────────────────────────────────────────────────────────
-  const cleanupAudio = useCallback(() => {
-    if (silenceTimerRef.current) { clearInterval(silenceTimerRef.current); silenceTimerRef.current = null }
-    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null }
+    setListening(false)
+    setVoiceBusy(false)
   }, [])
 
-  const startRecording = useCallback(async () => {
-    setMessages(prev => [...prev, { role: 'assistant', content: '🎙️ Listening...' }])
+  const startVoiceCapture = useCallback(async () => {
+    setVoiceError(null)
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setVoiceError('Microphone access is not available in this environment.')
+      return
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-      // ── Silence detection via Web Audio ──────────────────────────────────
-      const audioCtx = new AudioContext()
-      audioCtxRef.current = audioCtx
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 512
-      audioCtx.createMediaStreamSource(stream).connect(analyser)
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      const SILENCE_THRESHOLD = 8   // RMS (0–100) below this = silence
-      const SILENCE_MS = 1500       // ms of silence before auto-stop
-      const MIN_RECORD_MS = 600     // don't auto-stop before this
-      const recordingStart = Date.now()
-      let silenceStart: number | null = null
-
-      const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-
-      silenceTimerRef.current = setInterval(() => {
-        analyser.getByteTimeDomainData(dataArray)
-        let sum = 0
-        for (let i = 0; i < dataArray.length; i++) {
-          const v = (dataArray[i] - 128) / 128
-          sum += v * v
-        }
-        const rms = Math.sqrt(sum / dataArray.length) * 100
-
-        if (rms < SILENCE_THRESHOLD) {
-          if (silenceStart === null) silenceStart = Date.now()
-          else if (Date.now() - silenceStart > SILENCE_MS && Date.now() - recordingStart > MIN_RECORD_MS) {
-            cleanupAudio()
-            recorder.stop()
-            setRecording(false)
-          }
-        } else {
-          silenceStart = null
-        }
-      }, 100)
-
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
+      const recorder = new MediaRecorder(stream, { mimeType })
+      const chunks: Blob[] = []
+      setListening(true)
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data)
+      }
+      recorder.onerror = () => {
+        setVoiceError('Microphone recording failed.')
+        setListening(false)
+        stream.getTracks().forEach(track => track.stop())
+      }
       recorder.onstop = async () => {
-        cleanupAudio()
-        stream.getTracks().forEach(t => t.stop())
-        const total = chunksRef.current.reduce((n, b) => n + b.size, 0)
-
-        if (total < 500) {
-          setMessages(prev => prev.filter(m => !m.content.startsWith('🎙️')))
-          setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Too short — speak for at least 1 second.' }])
+        setListening(false)
+        stream.getTracks().forEach(track => track.stop())
+        if (chunks.length === 0) {
+          setVoiceError('No audio was captured. Try again and speak clearly.')
           return
         }
-
         try {
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-          const transcript = await transcribeAudio(blob)
-          setMessages(prev => prev.filter(m => !m.content.startsWith('🎙️')))
-          if (transcript.trim()) send(transcript)
-          else setMessages(prev => [...prev, { role: 'assistant', content: "🎙️ Couldn't hear you clearly — try again." }])
-        } catch (err) {
-          setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Whisper error: ${err}` }])
+          setVoiceBusy(true)
+          const blob = new Blob(chunks, { type: mimeType })
+          const arrayBuffer = await blob.arrayBuffer()
+          const bytes = new Uint8Array(arrayBuffer)
+          let binary = ''
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+          const base64 = btoa(binary)
+          const { jobId } = await window.foldermind.transcribeVoice(base64)
+          for (let attempt = 0; attempt < 60; attempt++) {
+            const result = await window.foldermind.getVoiceResult(jobId)
+            if (result.status === 'completed') {
+              const transcript = (result.text || '').trim()
+              setInput(transcript)
+              setVoiceBusy(false)
+              if (transcript) {
+                await handleSend(transcript)
+              }
+              return
+            }
+            if (result.status === 'failed') {
+              setVoiceError(result.error || 'Voice transcription failed.')
+              setVoiceBusy(false)
+              return
+            }
+            await new Promise(resolve => setTimeout(resolve, 500))
+          }
+          setVoiceError('Voice transcription timed out.')
+        } catch (error: any) {
+          setVoiceError(error?.message || 'Unable to transcribe microphone input.')
+        } finally {
+          setVoiceBusy(false)
+          if (voiceAutoRestartRef.current) {
+            voicePendingRestartRef.current = setTimeout(() => { void startVoiceCapture() }, 700)
+          }
         }
-        setTranscribing(false)
       }
-
+      recognitionRef.current = recorder
       recorder.start()
-      mediaRecorderRef.current = recorder
-      setRecording(true)
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Mic failed: ${err}` }])
+      setTimeout(() => {
+        if (recorder.state === 'recording') recorder.stop()
+      }, 7000)
+    } catch (error: any) {
+      setListening(false)
+      setVoiceError(error?.message || 'Unable to start microphone input.')
     }
-  }, [send, cleanupAudio])
+  }, [])
 
-  const stopRecording = useCallback(() => {
-    cleanupAudio()
-    mediaRecorderRef.current?.stop()
-    setRecording(false)
-  }, [cleanupAudio])
+  const toggleVoice = useCallback(async () => {
+    setVoiceError(null)
+    if (listening || voiceBusy) {
+      stopVoiceLoop()
+      return
+    }
+    voiceAutoRestartRef.current = voiceAutoMode
+    await startVoiceCapture()
+  }, [listening, voiceBusy, voiceAutoMode, startVoiceCapture, stopVoiceLoop])
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) }
+  const handleApproval = async (approved: boolean) => {
+    if (!approvalRequest) return
+    await window.foldermind.approve(approvalRequest.id, approved)
+    setApprovalRequest(null)
   }
 
+  const submitTask = () => {
+    if (!taskInput.trim()) return
+    onAddTask(taskInput.trim())
+    setTaskInput('')
+  }
+
+  const startEditingTask = (task: TaskItem) => {
+    setEditingTaskId(task.id)
+    setEditingTaskText(task.text)
+  }
+
+  const cancelTaskEdit = () => {
+    setEditingTaskId(null)
+    setEditingTaskText('')
+  }
+
+  const commitTaskEdit = async (task: TaskItem) => {
+    const nextText = editingTaskText.trim()
+    if (!nextText) return
+    await window.foldermind.updateTask(folderPath, task.id, { text: nextText })
+    cancelTaskEdit()
+    onMemoryUpdate(memory)
+  }
+
+  const resetRunPanels = () => {
+    setStreamingContent('')
+    setCurrentTool(null)
+    setActivity([])
+    setPlan(null)
+  }
+
+  const handleClearChat = async () => {
+    await window.foldermind.clearChatHistory(folderPath)
+    setMessages([])
+    resetRunPanels()
+  }
+
+  const handleRunTask = async (task: TaskItem) => {
+    if (loading || !hasApiKey) return
+    setSelectedTaskId(task.id)
+    setMessages(prev => [...prev, { role: 'user', content: `Run task: ${task.text}` }])
+    setLoading(true)
+    resetRunPanels()
+    try {
+      const response = await onRunTask(task)
+      if (response) setMessages(prev => [...prev, { role: 'assistant', content: response }])
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error while running task.' }])
+    } finally {
+      setLoading(false)
+      setStreamingContent('')
+    }
+  }
+
+  const speakText = useCallback(async (text: string) => {
+    if (!voiceRepliesEnabled || !text.trim()) return
+    try {
+      const { jobId } = await window.foldermind.speakText(text)
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const result = await window.foldermind.getSpeechResult(jobId)
+        if (result.status === 'completed' && result.audioBase64) {
+          const audio = new Audio(`data:${result.mimeType || 'audio/mpeg'};base64,${result.audioBase64}`)
+          await audio.play()
+          return
+        }
+        if (result.status === 'failed') {
+          setVoiceError(result.error || 'Voice reply failed.')
+          return
+        }
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      setVoiceError('Voice reply timed out.')
+    } catch (error: any) {
+      setVoiceError(error?.message || 'Unable to play voice reply.')
+    }
+  }, [voiceRepliesEnabled])
+
+  const handleSend = async (overridePrompt?: string) => {
+    const prompt = (overridePrompt ?? input).trim()
+    if (!prompt || loading || !hasApiKey) return
+
+    const history = messages
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => ({ role: msg.role === 'tool' ? 'assistant' : msg.role, content: msg.content }))
+
+    setMessages(prev => [...prev, { role: 'user', content: prompt }])
+    setInput('')
+    setLoading(true)
+    resetRunPanels()
+
+    try {
+      const response = await window.foldermind.chat(folderPath, prompt, history, memory)
+      setStreamingContent('')
+      setCurrentTool(null)
+      if (response) {
+        setMessages(prev => [...prev, { role: 'assistant', content: response }])
+        speakText(response)
+      }
+    } catch (error: any) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${error?.message || 'Error while sending message.'}` }])
+    } finally {
+      setLoading(false)
+      setStreamingContent('')
+    }
+  }
+
+  const showEmptyState = messages.length === 0 && historyLoaded
+
   return (
-    <div className="chat-panel">
-      <div className="chat-messages">
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <p>👋 I've read everything in <strong>{folderName}</strong>.</p>
-            <p>Ask questions, request files, run commands — I've got you.</p>
-          </div>
-        )}
-        {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>
-            <span className="message-role">{msg.role === 'user' ? 'You' : '🧠 FolderMind'}</span>
-            <p className="message-content">{msg.content}</p>
-          </div>
-        ))}
-        {streaming && (
-          <div className="message assistant">
-            <span className="message-role">🧠 FolderMind</span>
-            <p className="message-content">{streaming}<span className="cursor">▋</span></p>
-          </div>
-        )}
-        {toolStatus && (
-          <div className="tool-status">{toolStatus}</div>
-        )}
-        {transcribing && (
-          <div className="tool-status">🎙️ Transcribing...</div>
-        )}
-        <div ref={bottomRef} />
+    <div className="chat-shell">
+      <div className="chat-panel">
+        {showEmptyState
+          ? <ChatEmptyState folderName={folderName} hasApiKey={hasApiKey} onPrompt={setInput} />
+          : <ChatMessageList messages={messages} streamingContent={streamingContent} currentTool={currentTool} loading={loading} bottomRef={bottomRef} />}
+
+        {(voiceError || voiceBusy) && <div className="voice-status-banner">🎙️ {voiceBusy ? 'Transcribing microphone input...' : voiceError}</div>}
+
+        <div className="voice-controls-row">
+          <button className="btn-secondary" onClick={() => setVoiceRepliesEnabled(prev => !prev)} disabled={loading || voiceBusy}>
+            {voiceRepliesEnabled ? '🔊 Voice Replies On' : '🔇 Voice Replies Off'}
+          </button>
+          <button className="btn-secondary" onClick={() => setVoiceAutoMode(prev => !prev)} disabled={loading || listening || voiceBusy}>
+            {voiceAutoMode ? '🎤 Auto Listen On' : '🎤 Auto Listen Off'}
+          </button>
+        </div>
+
+        <div className="chat-input-row">
+          <textarea className="chat-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }} placeholder={hasApiKey ? 'Ask FolderMind to inspect, edit, or analyze this folder...' : 'Add your OpenAI API key in Settings to start chatting...'} rows={3} disabled={!hasApiKey || loading} />
+          <button className="btn-send" onClick={() => void toggleVoice()} disabled={loading || !hasApiKey} style={{ background: listening ? '#fbbc04' : voiceBusy ? '#3a2f0d' : 'transparent', border: '1px solid #444', padding: '0 10px', fontSize: '18px', color: listening ? '#000' : 'inherit' }} title="Voice input">{listening ? '⏹️' : voiceBusy ? '⏳' : '🎙️'}</button>
+          <button className="btn-send" onClick={() => void handleSend()} disabled={loading || !input.trim() || !hasApiKey}>Send</button>
+          <button className="btn-secondary" onClick={() => void handleClearChat()} disabled={loading || messages.length === 0}>Clear</button>
+        </div>
       </div>
 
-      <div className="debug-bar">
-        <button style={{fontSize:'11px',background:'#222',border:'1px solid #444',color:'#aaa',padding:'4px 10px',borderRadius:'6px',cursor:'pointer'}}
-          onClick={async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const result = await (window as any).foldermind.testMic()
-            setMessages(prev => [...prev, { role: 'assistant', content: `🔬 Mic test: ${JSON.stringify(result)}` }])
-          }}>
-          Test Mic
-        </button>
-      </div>
-      <div className="chat-input-row">
-        <textarea
-          className="chat-input"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKey}
-          placeholder="Ask anything, or say 'create a tracker' / 'run a script'..."
-          rows={2}
-          disabled={loading}
+      <aside className="agent-sidebar">
+        <TaskSidebar
+          tasks={tasks}
+          selectedTaskId={selectedTaskId}
+          setSelectedTaskId={setSelectedTaskId}
+          editingTaskId={editingTaskId}
+          editingTaskText={editingTaskText}
+          setEditingTaskText={setEditingTaskText}
+          startEditingTask={startEditingTask}
+          commitTaskEdit={commitTaskEdit}
+          cancelTaskEdit={cancelTaskEdit}
+          submitTask={submitTask}
+          taskInput={taskInput}
+          setTaskInput={setTaskInput}
+          onToggleTask={onToggleTask}
+          onDeleteTask={onDeleteTask}
+          onRunTask={handleRunTask}
+          hasApiKey={hasApiKey}
         />
-        <button
-          className={`btn-voice ${recording ? 'active' : ''}`}
-          onClick={recording ? stopRecording : startRecording}
-          title={recording ? 'Stop recording' : 'Speak'}
-          disabled={transcribing}
-        >
-          {recording ? '🔴' : transcribing ? '⏳' : '🎙️'}
-        </button>
-        <button
-          className={`btn-speaker ${voiceEnabled ? 'active' : ''}`}
-          onClick={() => setVoiceEnabled(v => !v)}
-          title={voiceEnabled ? 'Mute voice' : 'Unmute voice'}
-        >
-          {voiceEnabled ? '🔊' : '🔇'}
-        </button>
-        <button className="btn-send" onClick={() => send(input)} disabled={loading || !input.trim()}>
-          Send
-        </button>
-      </div>
+
+        <section className="agent-card">
+          <h3>Plan</h3>
+          {!plan ? <p className="muted">No active plan yet.</p> : <><p className="plan-goal">{plan.goal}</p><div className="plan-steps">{plan.steps.map(step => <div key={step.id} className={`plan-step ${step.status}`}><span className="plan-dot" /><span>{step.text}</span></div>)}</div></>}
+        </section>
+
+        <section className="agent-card">
+          <h3>Activity</h3>
+          {activity.length === 0 ? <p className="muted">No activity yet.</p> : <div className="activity-list">{activity.slice().reverse().map((entry, idx) => <div key={`${entry.ts}-${idx}`} className="activity-item"><span className={`activity-kind ${entry.kind}`}>{entry.kind}</span><span className="activity-message">{entry.message}</span></div>)}</div>}
+        </section>
+
+        <section className="agent-card"><h3>Memory</h3><pre className="memory-preview">{memory}</pre></section>
+
+        {approvalRequest && <ApprovalCard approvalRequest={approvalRequest} onBlock={() => void handleApproval(false)} onApprove={() => void handleApproval(true)} />}
+      </aside>
     </div>
   )
 }

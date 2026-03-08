@@ -1,0 +1,79 @@
+import { useCallback } from 'react'
+import { Sidebar } from './components/Sidebar'
+import { ChatPanel } from './components/ChatPanel'
+import { useFolder } from './hooks/useFolder'
+import type { SmartFolder } from './hooks/useFolder'
+import './App.css'
+
+export default function App() {
+  const {
+    activeFolder,
+    recentFolders,
+    createFolder,
+    openFolder,
+    updateMemory,
+  } = useFolder()
+
+  const handleSelectFolder = useCallback((folder: SmartFolder) => {
+    console.log('Select folder:', folder.path)
+  }, [])
+
+  const handleMemoryUpdate = useCallback(async (newMemory: string) => {
+    await updateMemory(newMemory)
+  }, [updateMemory])
+
+  return (
+    <div className="app">
+      <Sidebar
+        activeFolder={activeFolder}
+        recentFolders={recentFolders}
+        onCreateFolder={createFolder}
+        onOpenFolder={openFolder}
+        onSelectFolder={handleSelectFolder}
+      />
+
+      <main className="main">
+        {!activeFolder ? (
+          <div className="welcome">
+            <div className="welcome-inner">
+              <h1>🗂️ FolderMind</h1>
+              <p className="tagline">Every folder, a co-worker.</p>
+              <p className="desc">
+                Drop files into a folder. Ask questions. Get answers.<br />
+                Your AI agent can read, write, and execute code within your project.
+              </p>
+              <div className="welcome-actions">
+                <button className="btn-primary large" onClick={createFolder}>
+                  + Create Smart Folder
+                </button>
+                <button className="btn-secondary large" onClick={openFolder}>
+                  Open Existing Folder
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="workspace">
+            <div className="workspace-header">
+              <div>
+                <h2>{activeFolder.name}</h2>
+                <span className="folder-path">{activeFolder.path}</span>
+              </div>
+              <div className="workspace-badge" style={{display: 'flex', gap: '10px'}}>
+                <button onClick={() => window.foldermind.openInExplorer(activeFolder.path, '')} style={{background: 'transparent', border: '1px solid #444', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px'}}>📂 Open</button>
+                <span>🧠 Agent Active</span>
+              </div>
+            </div>
+
+            <ChatPanel
+              folderPath={activeFolder.path}
+              folderName={activeFolder.name}
+              memory={activeFolder.memory}
+              onMemoryUpdate={handleMemoryUpdate}
+            />
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}

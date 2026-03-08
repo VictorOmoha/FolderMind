@@ -2,6 +2,7 @@
   "name": "foldermind",
   "version": "0.1.0",
   "description": "Every folder, a co-worker.",
+  "author": "Omoha Solutions",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -10,6 +11,7 @@
   },
   "dependencies": {
     "chokidar": "^3.6.0",
+    "dotenv": "^17.3.1",
     "firebase": "^10.12.0",
     "mime-types": "^3.0.2",
     "openai": "^4.47.0",

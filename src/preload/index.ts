@@ -3,18 +3,34 @@ import { contextBridge, ipcRenderer } from 'electron'
 contextBridge.exposeInMainWorld('foldermind', {
   createFolder: () => ipcRenderer.invoke('folder:create'),
   openFolder: () => ipcRenderer.invoke('folder:open'),
-  getFolderContext: (path: string) => ipcRenderer.invoke('folder:context', path),
-  writeFile: (folderPath: string, fileName: string, content: string) =>
-    ipcRenderer.invoke('folder:writeFile', folderPath, fileName, content),
-  updateMemory: (folderPath: string, memory: string) =>
-    ipcRenderer.invoke('folder:updateMemory', folderPath, memory),
-  runCommand: (folderPath: string, command: string) =>
-    ipcRenderer.invoke('folder:runCommand', folderPath, command),
-  openInExplorer: (folderPath: string, target: string) =>
-    ipcRenderer.invoke('folder:openInExplorer', folderPath, target),
-  testMic: () => ipcRenderer.invoke('debug:testMic'),
-  onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => {
-    ipcRenderer.on('folder:changed', (_e, data) => cb(data))
-    return () => ipcRenderer.removeAllListeners('folder:changed')
-  },
+  getBriefing: (folderPath: string, folderName: string) => ipcRenderer.invoke('folder:getBriefing', folderPath, folderName),
+  getGitStatus: (folderPath: string) => ipcRenderer.invoke('folder:getGitStatus', folderPath),
+  getConfig: (folderPath: string) => ipcRenderer.invoke('folder:getConfig', folderPath),
+  getChatHistory: (folderPath: string) => ipcRenderer.invoke('chat:getHistory', folderPath),
+  clearChatHistory: (folderPath: string) => ipcRenderer.invoke('chat:clearHistory', folderPath),
+  updateConfig: (folderPath: string, updates: { tone?: string; archetype?: 'general' | 'codebase' | 'research' | 'content' | 'operations'; goals?: string[]; constraints?: string[] }) => ipcRenderer.invoke('folder:updateConfig', folderPath, updates),
+  listTasks: (folderPath: string) => ipcRenderer.invoke('tasks:list', folderPath),
+  addTask: (folderPath: string, text: string) => ipcRenderer.invoke('tasks:add', folderPath, text),
+  updateTask: (folderPath: string, taskId: string, updates: { text?: string; status?: 'open' | 'done' }) => ipcRenderer.invoke('tasks:update', folderPath, taskId, updates),
+  deleteTask: (folderPath: string, taskId: string) => ipcRenderer.invoke('tasks:delete', folderPath, taskId),
+  runTask: (folderPath: string, taskId: string) => ipcRenderer.invoke('tasks:run', folderPath, taskId),
+  openInExplorer: (folderPath: string, target: string) => ipcRenderer.invoke('folder:openInExplorer', folderPath, target),
+
+  setApiKey: (key: string) => ipcRenderer.invoke('agent:setKey', key),
+  getAgentStatus: () => ipcRenderer.invoke('agent:status'),
+  transcribeVoice: (audioBase64: string) => ipcRenderer.invoke('voice:transcribe', audioBase64),
+  getVoiceResult: (jobId: string) => ipcRenderer.invoke('voice:getResult', jobId),
+  speakText: (text: string) => ipcRenderer.invoke('voice:speak', text),
+  getSpeechResult: (jobId: string) => ipcRenderer.invoke('voice:getSpeechResult', jobId),
+  chat: (folderPath: string, message: string, history: any[], memory: string) => ipcRenderer.invoke('agent:chat', folderPath, message, history, memory),
+  approve: (approvalId: string, approved: boolean) => ipcRenderer.invoke('agent:approve', approvalId, approved),
+
+  onToken: (cb: (token: string) => void) => { ipcRenderer.on('agent:token', (_e, t) => cb(t)); return () => ipcRenderer.removeAllListeners('agent:token') },
+  onToolCall: (cb: (data: { name: string; args: any }) => void) => { ipcRenderer.on('agent:toolCall', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:toolCall') },
+  onToolResult: (cb: (data: { name: string; result: string }) => void) => { ipcRenderer.on('agent:toolResult', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:toolResult') },
+  onMemoryUpdated: (cb: (memory: string) => void) => { ipcRenderer.on('agent:memoryUpdated', (_e, m) => cb(m)); return () => ipcRenderer.removeAllListeners('agent:memoryUpdated') },
+  onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => { ipcRenderer.on('folder:changed', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('folder:changed') },
+  onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => { ipcRenderer.on('agent:plan', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:plan') },
+  onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => { ipcRenderer.on('agent:activity', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:activity') },
+  onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => { ipcRenderer.on('agent:approvalRequested', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:approvalRequested') },
 })
