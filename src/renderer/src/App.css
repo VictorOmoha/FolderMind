@@ -537,10 +537,143 @@ body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidde
 .btn-send:hover { background: var(--accent-hover); }
 .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.auth-screen, .splash {
-  height: 100vh; display: flex; align-items: center; justify-content: center;
+.auth-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--bg);
 }
+
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+}
+
+.auth-logo { font-size: 44px; line-height: 1; }
+
+.auth-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.auth-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.auth-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-input {
+  width: 100%;
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  padding: 11px 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.auth-input:focus { outline: none; border-color: var(--accent); }
+.auth-input::placeholder { color: var(--text-muted); }
+
+.auth-error {
+  font-size: 12px;
+  color: #f87171;
+  background: #2e1414;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-btn-primary {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.auth-btn-primary:hover { background: var(--accent-hover); }
+
+.auth-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-btn-google {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 11px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.auth-btn-google:hover { background: #2a2a3a; border-color: #666; }
+
+.auth-toggle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+}
+.auth-toggle button {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  font-family: inherit;
+}
+.auth-toggle button:hover { text-decoration: underline; }
 .settings-modal {
   max-width: 900px;
   align-items: stretch;
@@ -624,6 +757,723 @@ body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidde
   margin-right: auto;
   font-size: 12px;
   color: #d7c37a;
+}
+
+/* ──────────────────────────────────────────────
+   Git Panel
+────────────────────────────────────────────── */
+.git-panel {
+  border-bottom: 1px solid var(--border);
+  background: #0b0b0b;
+}
+.git-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  cursor: pointer;
+  user-select: none;
+}
+.git-panel-header:hover { background: #111; }
+.git-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.git-panel-icon { font-size: 14px; opacity: 0.7; }
+.git-ahead-behind {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.git-panel-counts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.git-count-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.git-count-pill.changed { background: #2e1f00; border-color: #6b4800; color: #fbbf24; }
+.git-count-pill.staged  { background: #0f2d1a; border-color: #1a5c34; color: #4ade80; }
+.git-count-pill.untracked { background: #1a1a2e; border-color: #3b3b6b; color: #a5b4fc; }
+.git-count-pill.clean { background: #101a10; border-color: #1a3a1a; color: #86efac; }
+.git-panel-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 9px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.git-panel-body {
+  padding: 0 24px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Git sections (Changed / Staged / Untracked) ── */
+.git-section { display: flex; flex-direction: column; gap: 4px; }
+.git-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.git-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.git-action-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.git-action-btn:hover { color: var(--text); border-color: #666; }
+
+/* ── File rows ── */
+.git-file-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.git-file-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.git-file-icon { font-size: 12px; flex-shrink: 0; }
+.git-file-name {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  color: #c9d1d9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-file-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.git-file-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.git-file-btn.stage  { border-color: #1a5c34; color: #4ade80; }
+.git-file-btn.stage:hover { background: #0f2d1a; }
+.git-file-btn.unstage { border-color: #7f1d1d; color: #f87171; }
+.git-file-btn.unstage:hover { background: #2e1414; }
+.git-file-btn.diff { border-color: #3b3b6b; color: #a5b4fc; }
+.git-file-btn.diff:hover { background: #1a1a2e; }
+.git-file-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Commit area ── */
+.git-commit-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.git-commit-input {
+  width: 100%;
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 8px 10px;
+  resize: none;
+  box-sizing: border-box;
+}
+.git-commit-input:focus { outline: none; border-color: var(--accent); }
+.git-commit-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.git-commit-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.git-commit-btn:hover { background: #2a2a3a; }
+.git-commit-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.git-commit-btn.primary:hover { background: var(--accent-hover); }
+.git-commit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.git-refresh-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.git-refresh-btn:hover { color: var(--text); }
+.git-op-result {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.git-op-result.ok    { background: #0f2d1a; border: 1px solid #1a5c34; color: #86efac; }
+.git-op-result.error { background: #2e1414; border: 1px solid #7f1d1d; color: #fecaca; }
+
+/* ──────────────────────────────────────────────
+   Auth loading splash
+────────────────────────────────────────────── */
+.splash {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.splash-logo { font-size: 40px; }
+.splash-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.splash-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ──────────────────────────────────────────────
+   Usage bar
+────────────────────────────────────────────── */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 24px;
+  background: #0d0d0d;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.usage-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.usage-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.usage-plan-pill {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.usage-plan-pill.free {
+  background: #1a1a2e;
+  border-color: #3b3b6b;
+  color: #a5b4fc;
+}
+.usage-plan-pill.pro {
+  background: #1a2e1a;
+  border-color: #3b6b3b;
+  color: #86efac;
+}
+.usage-plan-pill.business {
+  background: #2e1a1a;
+  border-color: #6b3b3b;
+  color: #fca5a5;
+}
+.usage-calls-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.usage-calls-label.exhausted { color: #f87171; }
+.usage-calls-track {
+  display: inline-block;
+  width: 80px;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.usage-calls-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.usage-upgrade-btn {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.usage-upgrade-btn:hover { background: var(--accent); color: #fff; }
+.usage-user-email {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-signout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.usage-signout-btn:hover { color: var(--text); border-color: #666; }
+
+.sync-indicator {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  transition: color 0.2s, border-color 0.2s;
+}
+.sync-indicator.syncing { color: #fbbf24; border-color: #78430d; animation: pulse-sync 1.2s ease-in-out infinite; }
+.sync-indicator.synced  { color: #4ade80; border-color: #166534; }
+.sync-indicator.error   { color: #f87171; border-color: #7f1d1d; }
+.sync-indicator.idle    { display: none; }
+@keyframes pulse-sync { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ──────────────────────────────────────────────
+   Usage limit banner (in chat)
+────────────────────────────────────────────── */
+.usage-limit-banner {
+  margin: 0 24px;
+  padding: 10px 12px;
+  background: #2e1414;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  color: #fecaca;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.usage-limit-upgrade-btn {
+  background: transparent;
+  border: 1px solid #f87171;
+  color: #f87171;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.usage-limit-upgrade-btn:hover { background: #7f1d1d; }
+
+/* ──────────────────────────────────────────────
+   Voice Panel
+────────────────────────────────────────────── */
+.voice-panel { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Mic button ── */
+.voice-mic-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+.voice-mic-btn {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  flex-shrink: 0;
+}
+.voice-mic-btn .voice-mic-icon {
+  font-size: 22px;
+  line-height: 1;
+  z-index: 1;
+  position: relative;
+}
+.voice-mic-btn:hover:not(:disabled) {
+  background: #2a2a3a;
+  border-color: var(--accent);
+}
+.voice-mic-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* listening state — amber glow */
+.voice-mic-btn.listening {
+  background: #3a2f00;
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6);
+  animation: mic-pulse 1.4s ease-out infinite;
+}
+/* transcribing state — indigo */
+.voice-mic-btn.transcribing {
+  background: #1a1a2e;
+  border-color: var(--accent);
+  animation: mic-pulse-soft 1.2s ease-in-out infinite;
+}
+/* speaking state — green */
+.voice-mic-btn.speaking {
+  background: #0f2d1a;
+  border-color: #4ade80;
+  animation: mic-pulse-soft 0.9s ease-in-out infinite;
+}
+
+/* expanding ring on listening */
+.voice-mic-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(251, 191, 36, 0.4);
+  animation: ring-expand 1.4s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.6); }
+  50%       { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
+}
+@keyframes mic-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+@keyframes ring-expand {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* state label */
+.voice-state-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.voice-state-label.listening   { color: #fbbf24; }
+.voice-state-label.transcribing { color: #a5b4fc; }
+.voice-state-label.speaking    { color: #4ade80; }
+
+/* ── Toggle pills ── */
+.voice-toggles {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.voice-toggle-pill {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  background: var(--surface2);
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  font-family: inherit;
+}
+.voice-toggle-pill.on {
+  background: #1a1a2e;
+  border-color: var(--accent);
+  color: #a5b4fc;
+}
+.voice-toggle-pill:hover:not(:disabled) { opacity: 0.85; }
+.voice-toggle-pill:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Last transcript ── */
+.voice-transcript {
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.voice-transcript-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.voice-transcript-text {
+  font-size: 12px;
+  color: #c9d1d9;
+  font-style: italic;
+  word-break: break-word;
+}
+
+/* ── Voice error ── */
+.voice-error {
+  font-size: 11px;
+  color: #f87171;
+  background: #2e1414;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+/* ──────────────────────────────────────────────
+   Task footprint panel
+────────────────────────────────────────────── */
+.task-footprint {
+  background: #0e0e0e;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.task-footprint-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-footprint-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.task-footprint-more {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.task-footprint-more:hover { text-decoration: underline; }
+
+/* clickable file path button */
+.task-run-file-path-btn {
+  background: transparent;
+  border: none;
+  color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  word-break: break-all;
+  flex: 1;
+}
+.task-run-file-path-btn:hover { color: #fff; text-decoration: underline; }
+
+/* diff / repeat badge on file items */
+.task-run-file-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #1f2c4a;
+  color: #93c5fd;
+  border: 1px solid #2d4a7a;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.task-run-file-item.dim .task-run-file-path-btn { color: var(--text-muted); }
+
+/* ──────────────────────────────────────────────
+   Diff Viewer
+────────────────────────────────────────────── */
+.diff-viewer {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: #0e0e0e;
+}
+.diff-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: #181818;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.diff-viewer-header:hover { background: #222; }
+.diff-viewer-filepath {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
+  color: #c9d1d9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff-viewer-stats {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.diff-stat-add {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.diff-stat-remove {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f87171;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.diff-stat-neutral {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.diff-toggle-icon {
+  font-size: 9px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.diff-viewer-body {
+  max-height: 320px;
+  overflow: auto;
+  background: #0e0e0e;
+}
+.diff-viewer-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.task-run-diffs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ──────────────────────────────────────────────
+   Task-to-files panel
+────────────────────────────────────────────── */
+.task-run-label-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.task-run-file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.task-run-file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: #131313;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.task-run-file-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.task-run-file-path {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: #c9d1d9;
+  word-break: break-all;
 }
 
 @media (max-width: 1200px) {

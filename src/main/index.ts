@@ -35,7 +35,7 @@ interface AgentConfig {
   }
 }
 
-interface TaskRunTrace { tool: string; detail: string; ts: number }
+interface TaskRunTrace { tool: string; detail: string; ts: number; diff?: string }
 interface TaskRunPlanStep { id: string; text: string; status: 'pending' | 'active' | 'done' }
 interface TaskRunPlanSnapshot { goal: string; steps: TaskRunPlanStep[]; ts: number }
 interface TaskRunActivityEntry { kind: string; message: string; ts: number }
@@ -107,7 +107,7 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
       const currentTask = current.tasks.items.find(t => t.id === taskId)
       const currentRun = currentTask?.runs?.find(r => r.id === run.id)
       if (!currentTask || !currentRun) return
-      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts }].slice(-50)
+      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts, diff: trace.diff }].slice(-50)
       if (trace.file) currentRun.filesTouched = Array.from(new Set([...(currentRun.filesTouched || []), trace.file]))
       if (trace.command) currentRun.commands = Array.from(new Set([...(currentRun.commands || []), trace.command]))
       persistStructuredMemory(folderPath, current)
@@ -231,6 +231,54 @@ ipcMain.handle('voice:speak', async (_e, text: string) => {
 })
 ipcMain.handle('voice:getSpeechResult', async (_e, jobId: string) => voiceSpeech.get(jobId) || { status: 'failed', error: 'Voice speech job not found.' })
 ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string) => shell.openPath(target ? join(folderPath, target) : folderPath))
+
+// ── Git operations ──────────────────────────────────────────────────────────
+const gitShell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
+
+ipcMain.handle('git:stageFile', async (_e, folderPath: string, filepath: string) => {
+  try {
+    const { stdout, stderr } = await execAsync(`git add -- "${filepath.replace(/"/g, '\\"')}"`, { cwd: folderPath, shell: gitShell })
+    return { ok: true, output: (stdout + stderr).trim() }
+  } catch (e: any) { return { ok: false, output: e.message } }
+})
+
+ipcMain.handle('git:unstageFile', async (_e, folderPath: string, filepath: string) => {
+  try {
+    const { stdout, stderr } = await execAsync(`git restore --staged -- "${filepath.replace(/"/g, '\\"')}"`, { cwd: folderPath, shell: gitShell })
+    return { ok: true, output: (stdout + stderr).trim() }
+  } catch (e: any) { return { ok: false, output: e.message } }
+})
+
+ipcMain.handle('git:stageAll', async (_e, folderPath: string) => {
+  try {
+    const { stdout, stderr } = await execAsync('git add .', { cwd: folderPath, shell: gitShell })
+    return { ok: true, output: (stdout + stderr).trim() }
+  } catch (e: any) { return { ok: false, output: e.message } }
+})
+
+ipcMain.handle('git:commit', async (_e, folderPath: string, message: string) => {
+  try {
+    const safe = message.replace(/"/g, '\\"')
+    const { stdout, stderr } = await execAsync(`git commit -m "${safe}"`, { cwd: folderPath, shell: gitShell })
+    return { ok: true, output: (stdout + stderr).trim() }
+  } catch (e: any) { return { ok: false, output: e.message } }
+})
+
+ipcMain.handle('git:push', async (_e, folderPath: string) => {
+  try {
+    const { stdout, stderr } = await execAsync('git push', { cwd: folderPath, shell: gitShell, timeout: 30000 })
+    return { ok: true, output: (stdout + stderr).trim() }
+  } catch (e: any) { return { ok: false, output: e.message } }
+})
+
+ipcMain.handle('git:getFileDiff', async (_e, folderPath: string, filepath: string, staged: boolean) => {
+  try {
+    const flag = staged ? '--cached' : ''
+    const safe = filepath.replace(/"/g, '\\"')
+    const { stdout } = await execAsync(`git diff ${flag} -- "${safe}"`, { cwd: folderPath, shell: gitShell })
+    return { ok: true, diff: stdout || '(no diff output)' }
+  } catch (e: any) { return { ok: false, diff: '' } }
+})
 
 app.whenReady().then(async () => { await startLocalServer(); session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true)); session.defaultSession.setPermissionCheckHandler(() => true); createWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() }) })
 app.on('window-all-closed', () => { activeWatcher?.close(); if (process.platform !== 'darwin') app.quit() })

@@ -5,6 +5,7 @@ import { ChatEmptyState } from './ChatEmptyState'
 import { ChatMessageList } from './ChatMessageList'
 import { TaskSidebar } from './TaskSidebar'
 import { ApprovalCard } from './ApprovalCard'
+import { VoicePanel } from './VoicePanel'
 
 interface Props {
   folderPath: string
@@ -12,14 +13,17 @@ interface Props {
   memory: string
   tasks: TaskItem[]
   hasApiKey: boolean
+  canSendAI?: boolean
   onMemoryUpdate: (memory: string) => void
   onRunTask: (task: TaskItem) => Promise<string | null>
   onAddTask: (text: string) => void
   onToggleTask: (task: TaskItem) => void
   onDeleteTask: (taskId: string) => void
+  onAfterAICall?: () => void
+  onUsageLimitHit?: () => void
 }
 
-export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, onMemoryUpdate, onRunTask, onAddTask, onToggleTask, onDeleteTask }: Props) {
+export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, canSendAI = true, onMemoryUpdate, onRunTask, onAddTask, onToggleTask, onDeleteTask, onAfterAICall, onUsageLimitHit }: Props) {
   const [listening, setListening] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -36,8 +40,10 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [voiceBusy, setVoiceBusy] = useState(false)
+  const [voiceSpeaking, setVoiceSpeaking] = useState(false)
   const [voiceRepliesEnabled, setVoiceRepliesEnabled] = useState(true)
   const [voiceAutoMode, setVoiceAutoMode] = useState(true)
+  const [lastTranscript, setLastTranscript] = useState('')
   const recognitionRef = useRef<any>(null)
   const voiceAutoRestartRef = useRef(false)
   const voicePendingRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -134,6 +140,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
             if (result.status === 'completed') {
               const transcript = (result.text || '').trim()
               setInput(transcript)
+              setLastTranscript(transcript)
               setVoiceBusy(false)
               if (transcript) {
                 await handleSend(transcript)
@@ -177,6 +184,19 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
     voiceAutoRestartRef.current = voiceAutoMode
     await startVoiceCapture()
   }, [listening, voiceBusy, voiceAutoMode, startVoiceCapture, stopVoiceLoop])
+
+  // Space-to-talk: press Space when no input is focused
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      void toggleVoice()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [toggleVoice])
 
   const handleApproval = async (approved: boolean) => {
     if (!approvalRequest) return
@@ -223,13 +243,17 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
 
   const handleRunTask = async (task: TaskItem) => {
     if (loading || !hasApiKey) return
+    if (!canSendAI) { onUsageLimitHit?.(); return }
     setSelectedTaskId(task.id)
     setMessages(prev => [...prev, { role: 'user', content: `Run task: ${task.text}` }])
     setLoading(true)
     resetRunPanels()
     try {
       const response = await onRunTask(task)
-      if (response) setMessages(prev => [...prev, { role: 'assistant', content: response }])
+      if (response) {
+        setMessages(prev => [...prev, { role: 'assistant', content: response }])
+        onAfterAICall?.()
+      }
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ Error while running task.' }])
     } finally {
@@ -246,6 +270,9 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
         const result = await window.foldermind.getSpeechResult(jobId)
         if (result.status === 'completed' && result.audioBase64) {
           const audio = new Audio(`data:${result.mimeType || 'audio/mpeg'};base64,${result.audioBase64}`)
+          setVoiceSpeaking(true)
+          audio.onended = () => setVoiceSpeaking(false)
+          audio.onerror = () => setVoiceSpeaking(false)
           await audio.play()
           return
         }
@@ -264,6 +291,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
   const handleSend = async (overridePrompt?: string) => {
     const prompt = (overridePrompt ?? input).trim()
     if (!prompt || loading || !hasApiKey) return
+    if (!canSendAI) { onUsageLimitHit?.(); return }
 
     const history = messages
       .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -280,6 +308,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
       setCurrentTool(null)
       if (response) {
         setMessages(prev => [...prev, { role: 'assistant', content: response }])
+        onAfterAICall?.()
         speakText(response)
       }
     } catch (error: any) {
@@ -299,27 +328,31 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
           ? <ChatEmptyState folderName={folderName} hasApiKey={hasApiKey} onPrompt={setInput} />
           : <ChatMessageList messages={messages} streamingContent={streamingContent} currentTool={currentTool} loading={loading} bottomRef={bottomRef} />}
 
-        {(voiceError || voiceBusy) && <div className="voice-status-banner">🎙️ {voiceBusy ? 'Transcribing microphone input...' : voiceError}</div>}
-
-        <div className="voice-controls-row">
-          <button className="btn-secondary" onClick={() => setVoiceRepliesEnabled(prev => !prev)} disabled={loading || voiceBusy}>
-            {voiceRepliesEnabled ? '🔊 Voice Replies On' : '🔇 Voice Replies Off'}
-          </button>
-          <button className="btn-secondary" onClick={() => setVoiceAutoMode(prev => !prev)} disabled={loading || listening || voiceBusy}>
-            {voiceAutoMode ? '🎤 Auto Listen On' : '🎤 Auto Listen Off'}
-          </button>
-        </div>
+        {!canSendAI && (
+          <div className="usage-limit-banner">
+            🚫 You've used all your AI calls this month.{' '}
+            <button className="usage-limit-upgrade-btn" onClick={onUsageLimitHit}>Upgrade to Pro →</button>
+          </div>
+        )}
 
         <div className="chat-input-row">
-          <textarea className="chat-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }} placeholder={hasApiKey ? 'Ask FolderMind to inspect, edit, or analyze this folder...' : 'Add your OpenAI API key in Settings to start chatting...'} rows={3} disabled={!hasApiKey || loading} />
-          <button className="btn-send" onClick={() => void toggleVoice()} disabled={loading || !hasApiKey} style={{ background: listening ? '#fbbc04' : voiceBusy ? '#3a2f0d' : 'transparent', border: '1px solid #444', padding: '0 10px', fontSize: '18px', color: listening ? '#000' : 'inherit' }} title="Voice input">{listening ? '⏹️' : voiceBusy ? '⏳' : '🎙️'}</button>
-          <button className="btn-send" onClick={() => void handleSend()} disabled={loading || !input.trim() || !hasApiKey}>Send</button>
+          <textarea
+            className="chat-input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }}
+            placeholder={hasApiKey ? 'Ask FolderMind anything… or press Space to talk' : 'Add your OpenAI API key in Settings to start chatting…'}
+            rows={3}
+            disabled={!hasApiKey || loading}
+          />
+          <button className="btn-send" onClick={() => void handleSend()} disabled={loading || !input.trim() || !hasApiKey || !canSendAI}>Send</button>
           <button className="btn-secondary" onClick={() => void handleClearChat()} disabled={loading || messages.length === 0}>Clear</button>
         </div>
       </div>
 
       <aside className="agent-sidebar">
         <TaskSidebar
+          folderPath={folderPath}
           tasks={tasks}
           selectedTaskId={selectedTaskId}
           setSelectedTaskId={setSelectedTaskId}
@@ -336,6 +369,20 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, on
           onDeleteTask={onDeleteTask}
           onRunTask={handleRunTask}
           hasApiKey={hasApiKey}
+        />
+
+        <VoicePanel
+          listening={listening}
+          transcribing={voiceBusy}
+          speaking={voiceSpeaking}
+          voiceRepliesEnabled={voiceRepliesEnabled}
+          voiceAutoMode={voiceAutoMode}
+          lastTranscript={lastTranscript}
+          error={voiceError}
+          hasApiKey={hasApiKey}
+          onToggle={() => void toggleVoice()}
+          onToggleReplies={() => setVoiceRepliesEnabled(prev => !prev)}
+          onToggleAutoMode={() => setVoiceAutoMode(prev => !prev)}
         />
 
         <section className="agent-card">

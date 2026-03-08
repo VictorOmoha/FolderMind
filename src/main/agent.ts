@@ -54,7 +54,7 @@ interface AgentContext {
   onPlan?: (plan: PlanState) => void
   onActivity?: (entry: ActivityEntry) => void
   onApprovalRequest?: (request: ApprovalRequest) => Promise<boolean>
-  onTrace?: (entry: { tool: string; detail: string; ts: number; file?: string; command?: string }) => void
+  onTrace?: (entry: { tool: string; detail: string; ts: number; file?: string; command?: string; diff?: string }) => void
 }
 
 interface ActivityEntry {
@@ -482,19 +482,23 @@ When communicating with the user, be concise, direct, and professional.`
             } else {
               if (!existsSync(parent)) mkdirSync(parent, { recursive: true })
               writeFileSync(target, after, 'utf-8')
+              const writeDiff = buildSimpleDiff(before, after, String(args.filepath))
+              onTrace?.({ tool: 'writeFile:committed', detail: `Wrote ${String(args.filepath)}`, ts: Date.now(), file: String(args.filepath), diff: writeDiff })
               result = `Success: wrote ${args.filepath}`
             }
           }
           else if (name === 'applyPatch') {
             onTrace?.({ tool: name, detail: `Prepared patch for ${String(args.filepath)}`, ts: Date.now(), file: String(args.filepath) })
             const target = safeJoin(folderPath, args.filepath)
-            const current = readFileSync(target, 'utf-8')
-            const updated = applyPatchToContent(current, String(args.findText || ''), String(args.replaceText || ''))
-            const approved = await requestFileChangeApproval(folderPath, args.filepath, current, updated, onApprovalRequest, onActivity)
+            const originalContent = readFileSync(target, 'utf-8')
+            const updated = applyPatchToContent(originalContent, String(args.findText || ''), String(args.replaceText || ''))
+            const approved = await requestFileChangeApproval(folderPath, args.filepath, originalContent, updated, onApprovalRequest, onActivity)
             if (!approved) {
               result = `File patch blocked: ${args.filepath}`
             } else {
               writeFileSync(target, updated, 'utf-8')
+              const patchDiff = buildSimpleDiff(originalContent, updated, String(args.filepath))
+              onTrace?.({ tool: 'applyPatch:committed', detail: `Patched ${String(args.filepath)}`, ts: Date.now(), file: String(args.filepath), diff: patchDiff })
               result = `Success: patched ${args.filepath}`
             }
           }

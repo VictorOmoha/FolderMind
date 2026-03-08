@@ -33,6 +33,7 @@ export interface TaskRunTrace {
   tool: string
   detail: string
   ts: number
+  diff?: string
 }
 
 export interface TaskRunPlanStep {
@@ -134,6 +135,14 @@ declare global {
       onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => () => void
       onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => () => void
       onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => () => void
+
+      // Git operations
+      gitStageFile: (folderPath: string, filepath: string) => Promise<{ ok: boolean; output: string }>
+      gitUnstageFile: (folderPath: string, filepath: string) => Promise<{ ok: boolean; output: string }>
+      gitStageAll: (folderPath: string) => Promise<{ ok: boolean; output: string }>
+      gitCommit: (folderPath: string, message: string) => Promise<{ ok: boolean; output: string }>
+      gitPush: (folderPath: string) => Promise<{ ok: boolean; output: string }>
+      gitGetFileDiff: (folderPath: string, filepath: string, staged: boolean) => Promise<{ ok: boolean; diff: string }>
     }
   }
 }

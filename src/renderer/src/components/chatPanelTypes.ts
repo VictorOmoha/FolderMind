@@ -37,6 +37,7 @@ export interface ApprovalRequest {
 }
 
 export interface TaskSidebarProps {
+  folderPath: string
   tasks: TaskItem[]
   selectedTaskId: string | null
   setSelectedTaskId: (taskId: string) => void
@@ -65,6 +66,7 @@ export interface ChatMessageListProps {
 
 export interface TaskRunSectionsProps {
   run: TaskRun
+  folderPath: string
 }
 
 export interface PlanSnapshotListProps {

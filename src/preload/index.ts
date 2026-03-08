@@ -33,4 +33,12 @@ contextBridge.exposeInMainWorld('foldermind', {
   onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => { ipcRenderer.on('agent:plan', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:plan') },
   onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => { ipcRenderer.on('agent:activity', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:activity') },
   onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => { ipcRenderer.on('agent:approvalRequested', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:approvalRequested') },
+
+  // Git operations
+  gitStageFile: (folderPath: string, filepath: string) => ipcRenderer.invoke('git:stageFile', folderPath, filepath),
+  gitUnstageFile: (folderPath: string, filepath: string) => ipcRenderer.invoke('git:unstageFile', folderPath, filepath),
+  gitStageAll: (folderPath: string) => ipcRenderer.invoke('git:stageAll', folderPath),
+  gitCommit: (folderPath: string, message: string) => ipcRenderer.invoke('git:commit', folderPath, message),
+  gitPush: (folderPath: string) => ipcRenderer.invoke('git:push', folderPath),
+  gitGetFileDiff: (folderPath: string, filepath: string, staged: boolean) => ipcRenderer.invoke('git:getFileDiff', folderPath, filepath, staged),
 })
