@@ -13,7 +13,7 @@ export function setApiKey(key: string) {
 }
 
 export function hasApiKey() {
-  return openai !== null
+  return openai !== null || !!(process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY)
 }
 
 const getOpenAI = () => {
@@ -41,7 +41,7 @@ interface StructuredMemory {
   project: string
   decisions: string
   preferences: string
-  tasks: { items: Array<{ text: string; status: 'open' | 'done' }> }
+  tasks: { items: Array<{ text: string; status: 'suggested' | 'open' | 'done' }> }
 }
 
 interface AgentContext {
@@ -55,6 +55,12 @@ interface AgentContext {
   onActivity?: (entry: ActivityEntry) => void
   onApprovalRequest?: (request: ApprovalRequest) => Promise<boolean>
   onTrace?: (entry: { tool: string; detail: string; ts: number; file?: string; command?: string; diff?: string }) => void
+}
+
+interface AutonomousReviewContext {
+  folderPath: string
+  profile?: AgentProfile
+  context: string
 }
 
 interface ActivityEntry {
@@ -643,7 +649,7 @@ Keep memory concise and deduplicated. Do not include ephemeral chatter.`
       tasks: {
         items: Array.isArray(parsed.tasks?.items)
           ? parsed.tasks.items
-              .filter((item) => item && typeof item.text === 'string' && (item.status === 'open' || item.status === 'done'))
+              .filter((item) => item && typeof item.text === 'string' && (item.status === 'suggested' || item.status === 'open' || item.status === 'done'))
               .slice(0, 20)
           : current.tasks,
       },
@@ -652,3 +658,45 @@ Keep memory concise and deduplicated. Do not include ephemeral chatter.`
     return current
   }
 }
+
+
+export async function runAutonomousReview(input: AutonomousReviewContext): Promise<string> {
+  const ai = getOpenAI()
+  const profileSection = input.profile ? `
+Agent Profile:
+- Name: ${input.profile.name || 'FolderMind'}
+- Archetype: ${input.profile.archetype || 'general'}
+- Tone: ${input.profile.tone || 'direct, practical, helpful'}
+- Goals: ${(input.profile.goals || []).join('; ') || 'No explicit goals set'}
+- Constraints: ${(input.profile.constraints || []).join('; ') || 'No explicit constraints set'}
+` : ''
+
+  const res = await ai.chat.completions.create({
+    model: 'gpt-4o',
+    temperature: 0.2,
+    messages: [
+      {
+        role: 'system',
+        content: `You are FolderMind's autonomous review worker.
+You review workspace changes in the background and produce safe, non-destructive operational guidance.
+Do not claim to have changed files or run commands.
+Return a concise markdown update with exactly these sections:
+## What changed
+## Risks
+## Recommended next actions
+Use short bullets. Prefer concrete file-level observations when possible.${profileSection}`,
+      },
+      {
+        role: 'user',
+        content: `Workspace: ${input.folderPath}
+
+Review context:
+${input.context}`,
+      },
+    ],
+  })
+
+  return res.choices[0].message.content?.trim() || '## What changed\n- Background review could not determine the impact.\n## Risks\n- Unable to assess risks.\n## Recommended next actions\n- Open the workspace and inspect the recent file changes.'
+}
+
+

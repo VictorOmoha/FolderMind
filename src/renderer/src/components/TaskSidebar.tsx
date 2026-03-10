@@ -218,6 +218,19 @@ function TaskFootprint({ task, folderPath }: { task: TaskItem; folderPath: strin
   )
 }
 
+function taskStatusLabel(task: TaskItem) {
+  if (task.status === 'suggested') return 'suggested'
+  return task.status
+}
+
+function taskSourceLabel(task: TaskItem) {
+  return task.source === 'agent' ? 'agent' : 'user'
+}
+
+function formatArchivedChainLabel(task: TaskItem) {
+  return task.archivedFromJobId ? `Archived from resolved chain ${task.archivedFromJobId}.` : null
+}
+
 // ── Main TaskSidebar ─────────────────────────────────────────────
 export function TaskSidebar({
   folderPath,
@@ -236,9 +249,13 @@ export function TaskSidebar({
   onToggleTask,
   onDeleteTask,
   onRunTask,
+  onSelectJob,
+  jobs,
   hasApiKey,
 }: TaskSidebarProps) {
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || null
+  const originatingJob = selectedTask?.suggestedByJobId ? jobs.find((job) => job.id === selectedTask.suggestedByJobId) || null : null
+  const archivedChainLabel = selectedTask ? formatArchivedChainLabel(selectedTask) : null
   const completedRuns = selectedTask?.runs?.filter((run) => run.status === 'completed').length || 0
   const failedRuns = selectedTask?.runs?.filter((run) => run.status === 'failed').length || 0
 
@@ -291,6 +308,10 @@ export function TaskSidebar({
                       <span>{task.text}</span>
                     </label>
                   )}
+                  <div className="task-run-meta">
+                    {taskStatusLabel(task)} · {taskSourceLabel(task)}
+                    {task.status === 'suggested' ? ' · review before running' : ''}
+                  </div>
                   {task.runs && task.runs.length > 0 && (
                     <div className="task-run-meta">
                       Last run: {task.runs[0].status}
@@ -303,10 +324,16 @@ export function TaskSidebar({
                     className="btn-ghost-inline"
                     onClick={(e) => { e.stopPropagation(); startEditingTask(task) }}
                   >Edit</button>
+                  {task.status === 'suggested' && (
+                    <button
+                      className="btn-ghost-inline"
+                      onClick={(e) => { e.stopPropagation(); onToggleTask(task) }}
+                    >Accept</button>
+                  )}
                   <button
                     className="btn-ghost-inline"
                     onClick={(e) => { e.stopPropagation(); void onRunTask(task) }}
-                    disabled={!hasApiKey}
+                    disabled={!hasApiKey || task.status === 'suggested'}
                   >Run</button>
                   <button
                     className="btn-ghost-inline danger"
@@ -327,7 +354,17 @@ export function TaskSidebar({
         ) : (
           <div className="task-detail">
             <div className="task-detail-title">{selectedTask.text}</div>
-            <div className="task-detail-status">Status: {selectedTask.status}</div>
+            <div className="task-detail-status">Status: {selectedTask.status} · {taskSourceLabel(selectedTask)}</div>
+            {selectedTask.status === 'suggested' && <div className="task-run-summary">This task was suggested by the agent. Accept it before running, or delete it to dismiss the suggestion.</div>}
+            {originatingJob && (
+              <div className="task-run-summary">
+                Originating job: {originatingJob.title}
+                {onSelectJob && <button className="btn-ghost-inline" onClick={() => onSelectJob(originatingJob.id)}>Open Job</button>}
+              </div>
+            )}
+            {!originatingJob && archivedChainLabel && (
+              <div className="task-run-summary">{archivedChainLabel}</div>
+            )}
 
             <div className="task-detail-metrics">
               <span className="task-metric success">{completedRuns} completed</span>

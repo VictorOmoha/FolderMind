@@ -5,6 +5,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { AuthScreen } from './components/AuthScreen'
 import { UpgradeModal } from './components/UpgradeModal'
 import { GitPanel } from './components/GitPanel'
+import { AgentInbox } from './components/AgentInbox'
 import { useFolder } from './hooks/useFolder'
 import { useAuth } from './hooks/useAuth'
 import { useUsage } from './hooks/useUsage'
@@ -38,6 +39,8 @@ export default function App() {
     briefing,
     gitStatus,
     tasks,
+    jobs,
+    events,
     briefingLoading,
     briefingError,
     recentChanges,
@@ -47,6 +50,7 @@ export default function App() {
     deleteTask,
     runTask,
     refreshTasks,
+    refreshJobs,
   } = useFolder()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -54,6 +58,8 @@ export default function App() {
   const [hasApiKey, setHasApiKey] = useState(false)
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null)
   const [upgradeReason, setUpgradeReason] = useState<'folders' | 'ai_calls' | null>(null)
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
 
   const headerButtonStyle = {
     background: 'transparent', border: '1px solid #444', color: '#fff',
@@ -80,8 +86,10 @@ export default function App() {
   }, [tasks]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectFolder = useCallback(async (folder: SmartFolder) => {
-    setActiveFolder(folder)
-    await sync.onFolderOpen(folder)
+    const activated = await window.foldermind.activateFolder(folder.path)
+    const nextFolder = activated || folder
+    setActiveFolder(nextFolder)
+    await sync.onFolderOpen(nextFolder)
   }, [setActiveFolder, sync])
 
   const handleCreateFolder = useCallback(async () => {
@@ -128,10 +136,11 @@ export default function App() {
     await window.foldermind.setApiKey(key)
     setHasApiKey(true)
     setWorkspaceNotice('OpenAI API key saved for this session.')
-  }, [])
+    refreshJobs?.()
+  }, [refreshJobs])
 
   const handleSaveProfile = useCallback(async (updates: {
-    tone: string; archetype: AgentConfig['archetype']; goals: string[]; constraints: string[]
+    tone: string; archetype: AgentConfig['archetype']; goals: string[]; constraints: string[]; guardrails: AgentConfig['guardrails']
   }) => {
     if (!activeFolder) return
     const updated = await window.foldermind.updateConfig(activeFolder.path, updates)
@@ -294,6 +303,40 @@ export default function App() {
               </div>
             </div>
 
+            <AgentInbox
+              tasks={tasks}
+              jobs={jobs}
+              events={events}
+              selectedJobId={selectedJobId}
+              onSelectJob={setSelectedJobId}
+              onRunNow={async () => {
+                if (!activeFolder) return
+                await window.foldermind.runAgentJobs(activeFolder.path)
+                refreshJobs?.()
+              }}
+              onApproveJob={async (jobId) => {
+                if (!activeFolder) return
+                await window.foldermind.approveAgentJob(activeFolder.path, jobId)
+                refreshJobs?.()
+                refreshTasks?.()
+              }}
+              onRetryJob={async (jobId) => {
+                if (!activeFolder) return
+                await window.foldermind.retryAgentJob(activeFolder.path, jobId)
+                refreshJobs?.()
+              }}
+              onDismissJob={async (jobId, reason) => {
+                if (!activeFolder) return
+                await window.foldermind.dismissAgentJob(activeFolder.path, jobId, reason)
+                refreshJobs?.()
+              }}
+              onCreateTask={async (text) => {
+                await addTask(text)
+                refreshTasks?.()
+              }}
+              onOpenTask={(taskId) => setSelectedTaskId(taskId)}
+            />
+
             {gitStatus?.isRepo
               ? <GitPanel
                   folderPath={activeFolder.path}
@@ -308,13 +351,17 @@ export default function App() {
               folderPath={activeFolder.path}
               memory={activeFolder.memory}
               tasks={tasks}
+              jobs={jobs}
+              selectedTaskId={selectedTaskId}
               hasApiKey={hasApiKey}
               canSendAI={canSendAI}
               onMemoryUpdate={handleMemoryUpdate}
               onRunTask={handleRunTask}
               onAddTask={addTask}
-              onToggleTask={(task) => updateTask(task.id, { status: task.status === 'open' ? 'done' : 'open' })}
+              onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
               onDeleteTask={deleteTask}
+              onSelectTask={setSelectedTaskId}
+              onSelectJob={setSelectedJobId}
               onAfterAICall={handleAfterAICall}
               onUsageLimitHit={() => setUpgradeReason('ai_calls')}
             />
@@ -344,3 +391,8 @@ export default function App() {
     </div>
   )
 }
+
+
+
+
+

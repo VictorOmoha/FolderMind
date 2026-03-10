@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { TaskItem, ChatMessage } from '../../../src/vite-env'
+import type { AgentJob, TaskItem, ChatMessage } from '../../../src/vite-env'
 import type { Message, PlanState, ActivityEntry, ApprovalRequest } from './chatPanelTypes'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatMessageList } from './ChatMessageList'
@@ -12,6 +12,8 @@ interface Props {
   folderName: string
   memory: string
   tasks: TaskItem[]
+  jobs: AgentJob[]
+  selectedTaskId: string | null
   hasApiKey: boolean
   canSendAI?: boolean
   onMemoryUpdate: (memory: string) => void
@@ -19,11 +21,13 @@ interface Props {
   onAddTask: (text: string) => void
   onToggleTask: (task: TaskItem) => void
   onDeleteTask: (taskId: string) => void
+  onSelectTask: (taskId: string) => void
+  onSelectJob: (jobId: string) => void
   onAfterAICall?: () => void
   onUsageLimitHit?: () => void
 }
 
-export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, canSendAI = true, onMemoryUpdate, onRunTask, onAddTask, onToggleTask, onDeleteTask, onAfterAICall, onUsageLimitHit }: Props) {
+export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selectedTaskId, hasApiKey, canSendAI = true, onMemoryUpdate, onRunTask, onAddTask, onToggleTask, onDeleteTask, onSelectTask, onSelectJob, onAfterAICall, onUsageLimitHit }: Props) {
   const [listening, setListening] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -36,7 +40,6 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, ca
   const [plan, setPlan] = useState<PlanState | null>(null)
   const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null)
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [voiceBusy, setVoiceBusy] = useState(false)
@@ -56,7 +59,6 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, ca
   useEffect(() => {
     setMessages([])
     setHistoryLoaded(false)
-    setSelectedTaskId(null)
     if (!folderPath) return
     window.foldermind.getChatHistory(folderPath)
       .then((history: ChatMessage[]) => {
@@ -244,7 +246,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, ca
   const handleRunTask = async (task: TaskItem) => {
     if (loading || !hasApiKey) return
     if (!canSendAI) { onUsageLimitHit?.(); return }
-    setSelectedTaskId(task.id)
+    onSelectTask(task.id)
     setMessages(prev => [...prev, { role: 'user', content: `Run task: ${task.text}` }])
     setLoading(true)
     resetRunPanels()
@@ -354,8 +356,9 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, ca
         <TaskSidebar
           folderPath={folderPath}
           tasks={tasks}
+          jobs={jobs}
           selectedTaskId={selectedTaskId}
-          setSelectedTaskId={setSelectedTaskId}
+          setSelectedTaskId={onSelectTask}
           editingTaskId={editingTaskId}
           editingTaskText={editingTaskText}
           setEditingTaskText={setEditingTaskText}
@@ -368,6 +371,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, hasApiKey, ca
           onToggleTask={onToggleTask}
           onDeleteTask={onDeleteTask}
           onRunTask={handleRunTask}
+          onSelectJob={onSelectJob}
           hasApiKey={hasApiKey}
         />
 
