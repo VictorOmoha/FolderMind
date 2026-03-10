@@ -105,8 +105,8 @@ function startLocalServer(): Promise<number> { return new Promise((resolve) => {
 let mainWindow: BrowserWindow | null = null
 let activeWatcher: ReturnType<typeof chokidar.watch> | null = null
 let activeFolderPath: string | null = null
-let pendingApprovals = new Map<string, (approved: boolean) => void>()
-let folderChangeLog = new Map<string, FolderChangeEvent[]>()
+const pendingApprovals = new Map<string, (approved: boolean) => void>()
+const folderChangeLog = new Map<string, FolderChangeEvent[]>()
 const AGENT_DIR = '.foldermind'
 const voiceTranscriptions = new Map<string, { status: 'processing' | 'completed' | 'failed'; text?: string; error?: string }>()
 const voiceSpeech = new Map<string, { status: 'processing' | 'completed' | 'failed'; audioBase64?: string; mimeType?: string; error?: string }>()

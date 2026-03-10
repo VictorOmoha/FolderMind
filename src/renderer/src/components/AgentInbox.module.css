@@ -1,0 +1,176 @@
+.inbox { margin-top: 12px; }
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.header .muted { margin: 4px 0 0; }
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.filters :global(.btn-secondary).active {
+  border-color: rgba(138, 180, 248, 0.45);
+  background: rgba(138, 180, 248, 0.18);
+  color: #dce8ff;
+}
+.jobList { display: grid; gap: 10px; }
+.archive {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.archiveTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.job {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #121212;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.jobArchived {
+  opacity: 0.82;
+  background: rgba(255, 255, 255, 0.03);
+}
+.jobTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.jobStatus {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.jobStatus.running { color: #8ab4f8; }
+.jobStatus.completed { color: #9ae6b4; }
+.jobStatus.failed { color: #ff9b9b; }
+.jobStatus.blocked { color: #fbe7a2; }
+.jobStatus.queued { color: #d1d5db; }
+
+.jobMeta, .jobFiles, .jobSummary, .jobError {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.jobFiles { color: var(--text); }
+.jobError { color: #ffb4b4; }
+.jobResult {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12px;
+  color: #d6d6d6;
+}
+.panels {
+  display: grid;
+  gap: 10px;
+}
+.panel {
+  border: 1px solid rgba(138, 180, 248, 0.2);
+  background: rgba(138, 180, 248, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+.panelHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+.panelActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.panelActions :global(.btn-secondary) {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.panelTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8ab4f8;
+}
+.panelBody {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 12px;
+}
+.job.selected {
+  border-color: #8ab4f8;
+  box-shadow: inset 0 0 0 1px rgba(138, 180, 248, 0.35);
+}
+
+.jobCommand,
+.jobCommandBlock {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0d0d0d;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #d6d6d6;
+}
+.jobDetail {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #121212;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.jobDetailHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.jobVerification {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.jobVerification.passed { color: #9ae6b4; }
+.jobVerification.failed { color: #ff9b9b; }
+.jobVerification.pending { color: #fbe7a2; }
+.jobActions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 980px) {
+  .grid { grid-template-columns: 1fr; }
+}

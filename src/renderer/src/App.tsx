@@ -12,6 +12,7 @@ import { useUsage } from './hooks/useUsage'
 import { useSync } from './hooks/useSync'
 import type { SmartFolder } from './hooks/useFolder'
 import type { TaskItem, AgentConfig } from '../../src/vite-env'
+import styles from './App.module.css'
 import './App.css'
 
 export default function App() {
@@ -34,7 +35,6 @@ export default function App() {
     recentFolders,
     createFolder,
     openFolder,
-    updateMemory,
     setActiveFolder,
     briefing,
     gitStatus,
@@ -105,13 +105,6 @@ export default function App() {
     const folder = await openFolder()
     if (folder) await sync.onFolderOpen(folder)
   }, [openFolder, sync])
-
-  const handleMemoryUpdate = useCallback(async (newMemory: string) => {
-    await updateMemory(newMemory)
-    if (activeFolder) sync.onMemoryChange(activeFolder.path, newMemory)
-    refreshBriefing?.()
-    refreshTasks?.()
-  }, [updateMemory, activeFolder, sync, refreshBriefing, refreshTasks])
 
   const handleRunTask = useCallback(async (task: TaskItem) => {
     const response = await runTask(task.id)
@@ -199,11 +192,11 @@ export default function App() {
 
   // Sync status display
   const syncLabel = sync.status === 'syncing' ? '⟳ Syncing' : sync.status === 'synced' ? '☁ Synced' : sync.status === 'error' ? '⚠ Sync error' : ''
-  const syncClass = `sync-indicator ${sync.status}`
+  const syncClass = `${styles.syncIndicator} ${styles[sync.status] || ''}`
 
   // ── Render ────────────────────────────────────────────────────
   return (
-    <div className="app">
+    <div className={styles.app}>
       <Sidebar
         activeFolder={activeFolder}
         recentFolders={mergedRecentFolders}
@@ -213,25 +206,25 @@ export default function App() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
 
-      <main className="main">
+      <main className={styles.main}>
         {!activeFolder ? (
-          <div className="welcome">
-            <div className="welcome-inner">
+          <div className={styles.welcome}>
+            <div className={styles.welcomeInner}>
               <h1>🗂️ FolderMind</h1>
-              <p className="tagline">Every folder, a co-worker.</p>
-              <p className="desc">
+              <p className={styles.tagline}>Every folder, a co-worker.</p>
+              <p className={styles.desc}>
                 Drop files into a folder. Ask questions. Get answers.<br />
                 Your AI agent can read, write, and execute code within your project.
               </p>
               {!hasApiKey && (
-                <p className="welcome-note">Tip: open Settings and add your OpenAI API key before running tasks.</p>
+                <p className={styles.welcomeNote}>Tip: open Settings and add your OpenAI API key before running tasks.</p>
               )}
-              <div className="welcome-steps">
-                <div className="welcome-step"><span>1</span><div><strong>Create or open a folder</strong><p>Choose the workspace you want FolderMind to understand.</p></div></div>
-                <div className="welcome-step"><span>2</span><div><strong>Add your API key</strong><p>Use Settings for a session key, or place one in your local .env.</p></div></div>
-                <div className="welcome-step"><span>3</span><div><strong>Chat or run tasks</strong><p>Ask for a summary, code changes, planning help, or execute saved tasks.</p></div></div>
+              <div className={styles.welcomeSteps}>
+                <div className={styles.welcomeStep}><span>1</span><div><strong>Create or open a folder</strong><p>Choose the workspace you want FolderMind to understand.</p></div></div>
+                <div className={styles.welcomeStep}><span>2</span><div><strong>Add your API key</strong><p>Use Settings for a session key, or place one in your local .env.</p></div></div>
+                <div className={styles.welcomeStep}><span>3</span><div><strong>Chat or run tasks</strong><p>Ask for a summary, code changes, planning help, or execute saved tasks.</p></div></div>
               </div>
-              <div className="welcome-actions">
+              <div className={styles.welcomeActions}>
                 <button className="btn-primary large" onClick={handleCreateFolder}>+ Create Smart Folder</button>
                 <button className="btn-secondary large" onClick={handleOpenFolder}>Open Existing Folder</button>
                 <button className="btn-secondary large" onClick={() => setSettingsOpen(true)}>Settings</button>
@@ -239,20 +232,20 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className="workspace">
-            <div className="workspace-header">
+          <div className={styles.workspace}>
+            <div className={styles.workspaceHeader}>
               <div>
                 <h2>{activeFolder.name}</h2>
-                <span className="folder-path">{activeFolder.path}</span>
-                <div className="status-row">
-                  <span className={`status-pill ${hasApiKey ? 'ok' : 'warn'}`}>
+                <span className={styles.folderPath}>{activeFolder.path}</span>
+                <div className={styles.statusRow}>
+                  <span className={`${styles.statusPill} ${hasApiKey ? styles.ok : styles.warn}`}>
                     {hasApiKey ? 'API Key Ready' : 'API Key Needed'}
                   </span>
-                  {agentConfig && <span className="status-pill neutral">{agentConfig.archetype}</span>}
-                  {agentConfig?.tone && <span className="status-pill neutral">tone: {agentConfig.tone}</span>}
+                  {agentConfig && <span className={`${styles.statusPill} ${styles.neutral}`}>{agentConfig.archetype}</span>}
+                  {agentConfig?.tone && <span className={`${styles.statusPill} ${styles.neutral}`}>tone: {agentConfig.tone}</span>}
                 </div>
               </div>
-              <div className="workspace-badge" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div className={styles.workspaceBadge} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <button onClick={() => window.foldermind.openInExplorer(activeFolder.path, '')} style={headerButtonStyle}>📂 Open</button>
                 <button onClick={() => refreshBriefing?.()} style={headerButtonStyle}>✨ Brief</button>
                 <button onClick={() => setSettingsOpen(true)} style={headerButtonStyle}>⚙️ Settings</button>
@@ -261,45 +254,45 @@ export default function App() {
             </div>
 
             {/* ── Usage bar ── */}
-            <div className="usage-bar">
-              <div className="usage-bar-left">
-                <span className={`usage-plan-pill ${usage.planTier}`}>{usage.planTier}</span>
-                <span className={`usage-calls-label ${!canSendAI ? 'exhausted' : ''}`}>
+            <div className={styles.usageBar}>
+              <div className={styles.usageBarLeft}>
+                <span className={`${styles.usagePlanPill} ${styles[usage.planTier] || ''}`}>{usage.planTier}</span>
+                <span className={`${styles.usageCallsLabel} ${!canSendAI ? styles.exhausted : ''}`}>
                   {aiCallsLabel}
                   {isFreeTier && (
-                    <span className="usage-calls-track">
+                    <span className={styles.usageCallsTrack}>
                       <span
-                        className="usage-calls-fill"
+                        className={styles.usageCallsFill}
                         style={{ width: `${Math.min(100, ((50 - aiCallsRemaining) / 50) * 100)}%` }}
                       />
                     </span>
                   )}
                 </span>
                 {isFreeTier && (
-                  <button className="usage-upgrade-btn" onClick={() => setUpgradeReason('ai_calls')}>
+                  <button className={styles.usageUpgradeBtn} onClick={() => setUpgradeReason('ai_calls')}>
                     Upgrade →
                   </button>
                 )}
               </div>
-              <div className="usage-bar-right">
+              <div className={styles.usageBarRight}>
                 {syncLabel && <span className={syncClass}>{syncLabel}</span>}
-                <span className="usage-user-email">{user?.email}</span>
-                <button className="usage-signout-btn" onClick={logout}>Sign out</button>
+                <span className={styles.usageUserEmail}>{user?.email}</span>
+                <button className={styles.usageSignoutBtn} onClick={logout}>Sign out</button>
               </div>
             </div>
 
-            {workspaceNotice && <div className="workspace-notice">{workspaceNotice}</div>}
+            {workspaceNotice && <div className={styles.workspaceNotice}>{workspaceNotice}</div>}
 
-            <div className="briefing-strip">
-              <div className="briefing-main">
+            <div className={styles.briefingStrip}>
+              <div className={styles.briefingMain}>
                 <strong>Folder Brief</strong>
                 <p>{briefingLoading ? 'Generating folder briefing...' : briefingError ? briefingError : briefing?.summary || 'No briefing yet.'}</p>
               </div>
-              <div className="briefing-side">
-                <div><span className="briefing-label">Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className="briefing-label">Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className="briefing-label">Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className="briefing-label">Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+              <div className={styles.briefingSide}>
+                <div><span className={styles.briefingLabel}>Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                <div><span className={styles.briefingLabel}>Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                <div><span className={styles.briefingLabel}>Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                <div><span className={styles.briefingLabel}>Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
               </div>
             </div>
 
@@ -343,7 +336,7 @@ export default function App() {
                   gitStatus={gitStatus}
                   onRefresh={() => refreshBriefing?.()}
                 />
-              : <div className="git-strip git-strip-empty"><div className="git-card wide"><span className="briefing-label">Git Status</span><p>This folder is not a git repository.</p></div><div className="git-card"><span className="briefing-label">Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
+              : <div className={`${styles.gitStrip} ${styles.gitStripEmpty}`}><div className={`${styles.gitCard} ${styles.wide}`}><span className={styles.briefingLabel}>Git Status</span><p>This folder is not a git repository.</p></div><div className={styles.gitCard}><span className={styles.briefingLabel}>Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
             }
 
             <ChatPanel
@@ -355,7 +348,6 @@ export default function App() {
               selectedTaskId={selectedTaskId}
               hasApiKey={hasApiKey}
               canSendAI={canSendAI}
-              onMemoryUpdate={handleMemoryUpdate}
               onRunTask={handleRunTask}
               onAddTask={addTask}
               onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
@@ -391,8 +383,3 @@ export default function App() {
     </div>
   )
 }
-
-
-
-
-

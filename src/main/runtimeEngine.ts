@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'fs'
 import { basename, join, relative } from 'path'
 import { promisify } from 'util'
 import { hasApiKey, runAutonomousReview } from './agent'
+import { AgentFollowUpKind, getWorkflowDefinition, getWorkflowFollowUps, getWorkflowSteps } from './runtimeDefinitions'
 import { findCommandRule } from './runtimePolicy'
 import { firstStructuredLine, inferVerificationCommandFromResult } from './runtimeWorkflow'
 import { AgentJob, JOB_TIMEOUT_MS, RuntimeDeps } from './runtimeTypes'
@@ -127,7 +128,8 @@ export async function buildJobContext(folderPath: string, job: AgentJob, deps: R
 }
 
 export async function executeJob(folderPath: string, job: AgentJob, deps: RuntimeDeps, onProgress: (phase: string, summary: string, extras?: Partial<AgentJob>) => Promise<void>) {
-  if (job.kind === 'test_run') {
+  const workflow = getWorkflowDefinition(job.kind)
+  if (workflow.mode === 'verification') {
     await onProgress('validate_command', `Validating verification command: ${job.command || 'npm run test'}`, {
       stepArtifacts: [{
         id: `artifact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -150,7 +152,7 @@ export async function executeJob(folderPath: string, job: AgentJob, deps: Runtim
     })
     return {
       result: output,
-      summary: `Verification command completed: ${job.command || 'npm run test'}`,
+      summary: `${workflow.completionSummary}: ${job.command || 'npm run test'}`,
       verificationStatus: 'passed' as const,
     }
   }
@@ -190,14 +192,7 @@ export async function executeJob(folderPath: string, job: AgentJob, deps: Runtim
 
   return {
     result,
-    summary:
-      job.kind === 'diff_summary'
-        ? 'Diff summary completed.'
-        : job.kind === 'docs_drift'
-          ? 'Documentation drift review completed.'
-          : job.kind === 'commit_prep'
-            ? 'Commit preparation completed.'
-            : 'Background review completed.',
+    summary: workflow.completionSummary,
     verificationStatus: job.verificationStatus,
   }
 }
@@ -224,11 +219,7 @@ export function queueDocsDriftFollowUp(folderPath: string, completedJob: AgentJo
     updatedAt: Date.now(),
     attemptCount: 0,
     filePaths: completedJob.filePaths,
-    planSteps: [
-      { id: 'collect_context', label: 'Collect workspace context', status: 'pending' },
-      { id: 'generate_result', label: 'Generate analysis', status: 'pending' },
-      { id: 'finalize', label: 'Finalize structured result', status: 'pending' },
-    ],
+    planSteps: getWorkflowSteps('docs_drift'),
     summary: 'Queued after review completion to check whether documentation still matches the code.',
   }
   jobs = [followUp, ...jobs].map((job) => job.id === completedJob.id ? { ...job, childJobIds: Array.from(new Set([...(job.childJobIds || []), followUp.id])) } : job)
@@ -262,11 +253,7 @@ export async function queueCommitPrepFollowUp(folderPath: string, completedJob: 
     updatedAt: Date.now(),
     attemptCount: 0,
     filePaths: completedJob.filePaths,
-    planSteps: [
-      { id: 'collect_context', label: 'Collect workspace context', status: 'pending' },
-      { id: 'generate_result', label: 'Generate analysis', status: 'pending' },
-      { id: 'finalize', label: 'Finalize structured result', status: 'pending' },
-    ],
+    planSteps: getWorkflowSteps('commit_prep'),
     summary: 'Queued after diff-oriented analysis to draft a commit summary and message.',
   }
   jobs = [followUp, ...jobs].map((job) => job.id === completedJob.id ? { ...job, childJobIds: Array.from(new Set([...(job.childJobIds || []), followUp.id])) } : job)
@@ -325,11 +312,7 @@ export function queueVerificationFollowUpFromAnalysis(folderPath: string, comple
     approvalRequired: commandRule.requiresApproval,
     approved: !commandRule.requiresApproval,
     verificationStatus: 'pending',
-    planSteps: [
-      { id: 'validate_command', label: 'Validate command policy', status: 'pending' },
-      { id: 'execute_command', label: 'Run verification command', status: 'pending' },
-      { id: 'finalize', label: 'Finalize verification result', status: 'pending' },
-    ],
+    planSteps: getWorkflowSteps('test_run'),
     summary: commandRule.requiresApproval
       ? `Analysis recommended verification. Approval required before running: ${command}`
       : `Analysis recommended verification. Queued command: ${command}`,
@@ -345,4 +328,18 @@ export function queueVerificationFollowUpFromAnalysis(folderPath: string, comple
   appendRuntimeEvent(folderPath, deps, { level: commandRule.requiresApproval ? 'warn' : 'info', type: commandRule.requiresApproval ? 'job_blocked' : 'job_queued', jobId: followUp.id, rootJobId: completedJob.rootJobId || completedJob.id, message: commandRule.requiresApproval ? `Analysis recommended verification and is awaiting approval: ${command}` : `Analysis recommended verification: ${command}` })
   saveAndEmit(folderPath, jobs, deps)
   if (!commandRule.requiresApproval) runNextJob()
+}
+
+const FOLLOW_UP_HANDLERS: Record<AgentFollowUpKind, (folderPath: string, completedJob: AgentJob, deps: RuntimeDeps, runNextJob: () => void) => void | Promise<void>> = {
+  recommended_verification: queueVerificationFollowUpFromAnalysis,
+  docs_drift: queueDocsDriftFollowUp,
+  commit_prep: queueCommitPrepFollowUp,
+}
+
+export async function queueConfiguredFollowUps(folderPath: string, completedJob: AgentJob, deps: RuntimeDeps, runNextJob: () => void) {
+  for (const followUp of getWorkflowFollowUps(completedJob)) {
+    const handler = FOLLOW_UP_HANDLERS[followUp]
+    if (!handler) continue
+    await handler(folderPath, completedJob, deps, runNextJob)
+  }
 }

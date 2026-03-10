@@ -110,24 +110,13 @@ export function useFolder() {
   }, [activeFolder])
 
   useEffect(() => {
-    const unsub = window.foldermind?.onFolderChanged?.((data) => {
-      setFileChanged(n => n + 1)
-      if (!activeFolder) return
-      if (!data.filePath.startsWith(activeFolder.path)) return
-      const rel = data.filePath.replace(activeFolder.path, '').replace(/^[/\\]/, '')
-      const entry = `${data.event}: ${rel}`
-      setRecentChanges(prev => [entry, ...prev].slice(0, 8))
-    })
-    return unsub
-  }, [activeFolder])
-
-  useEffect(() => {
     const unsub = window.foldermind?.onJobsUpdated?.((data) => {
       if (!activeFolder || data.folderPath !== activeFolder.path) return
       setJobs(data.jobs)
     })
     return unsub
   }, [activeFolder])
+
   useEffect(() => {
     const unsub = window.foldermind?.onEventsUpdated?.((data) => {
       if (!activeFolder || data.folderPath !== activeFolder.path) return
@@ -140,6 +129,34 @@ export function useFolder() {
     const unsub = window.foldermind?.onTasksUpdated?.((data) => {
       if (!activeFolder || data.folderPath !== activeFolder.path) return
       setTasks(data.tasks)
+    })
+    return unsub
+  }, [activeFolder])
+
+  useEffect(() => {
+    const unsub = window.foldermind?.onMemoryUpdated?.((newMemory) => {
+      if (!activeFolder) return
+      setActiveFolder(prev => prev ? { ...prev, memory: newMemory } : null)
+      // When memory updates (usually by agent), we should probably refresh the briefing
+      // as it might contain new decisions or tasks.
+      void loadBriefing(activeFolder)
+    })
+    return unsub
+  }, [activeFolder, loadBriefing])
+
+  useEffect(() => {
+    const unsub = window.foldermind?.onFolderChanged?.((data) => {
+      setFileChanged(n => n + 1)
+      if (!activeFolder) return
+      if (!data.filePath.startsWith(activeFolder.path)) return
+      const rel = data.filePath.replace(activeFolder.path, '').replace(/^[/\\]/, '')
+      const entry = `${data.event}: ${rel}`
+      setRecentChanges(prev => [entry, ...prev].slice(0, 8))
+      
+      // Optionally trigger git refresh or briefing refresh on significant changes
+      if (data.event === 'add' || data.event === 'unlink' || data.event === 'change') {
+         // Debounce or just wait for explicit refresh to save AI calls
+      }
     })
     return unsub
   }, [activeFolder])

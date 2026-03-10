@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatDiffLines } from './chatPanelUtils'
+import styles from './DiffViewer.module.css'
 
 interface Props {
   filepath: string
@@ -16,28 +17,28 @@ export function DiffViewer({ filepath, diff, label, defaultOpen = false }: Props
   const isEmpty = lines.length === 0 || (additions === 0 && removals === 0)
 
   return (
-    <div className="diff-viewer">
-      <button className="diff-viewer-header" onClick={() => setOpen((o) => !o)}>
-        <span className="diff-viewer-filepath">{label || filepath}</span>
-        <span className="diff-viewer-stats">
+    <div className={styles.viewer}>
+      <button className={styles.header} onClick={() => setOpen((o) => !o)}>
+        <span className={styles.filepath}>{label || filepath}</span>
+        <span className={styles.stats}>
           {!isEmpty && (
             <>
-              {additions > 0 && <span className="diff-stat-add">+{additions}</span>}
-              {removals > 0 && <span className="diff-stat-remove">-{removals}</span>}
+              {additions > 0 && <span className={styles.statAdd}>+{additions}</span>}
+              {removals > 0 && <span className={styles.statRemove}>-{removals}</span>}
             </>
           )}
-          {isEmpty && <span className="diff-stat-neutral">no changes</span>}
+          {isEmpty && <span className={styles.statNeutral}>no changes</span>}
         </span>
-        <span className="diff-toggle-icon">{open ? '▲' : '▼'}</span>
+        <span className={styles.toggleIcon}>{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
-        <div className="diff-viewer-body">
+        <div className={styles.body}>
           {lines.length === 0 ? (
-            <div className="diff-viewer-empty">No diff recorded.</div>
+            <div className={styles.empty}>No diff recorded.</div>
           ) : (
             lines.map((line) => (
-              <div key={line.id} className={`approval-diff-line ${line.kind}`}>
+              <div key={line.id} className={`${styles.diffLine} ${styles[line.kind] || ''}`}>
                 {line.text || '\u00A0'}
               </div>
             ))

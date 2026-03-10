@@ -1,19 +1,9 @@
+import { getWorkflowSteps } from './runtimeDefinitions'
 import { AgentJob, AgentJobArtifact, AgentJobAttentionState, AgentJobKind, AgentJobPlanStep, AgentJobStructuredResult, RuntimePolicy } from './runtimeTypes'
 import { findCommandByScriptName, findCommandRule } from './runtimePolicy'
 
 export function buildJobPlan(kind: AgentJobKind): AgentJobPlanStep[] {
-  if (kind === 'test_run') {
-    return [
-      { id: 'validate_command', label: 'Validate command policy', status: 'pending' },
-      { id: 'execute_command', label: 'Run verification command', status: 'pending' },
-      { id: 'finalize', label: 'Finalize verification result', status: 'pending' },
-    ]
-  }
-  return [
-    { id: 'collect_context', label: 'Collect workspace context', status: 'pending' },
-    { id: 'generate_result', label: 'Generate analysis', status: 'pending' },
-    { id: 'finalize', label: 'Finalize structured result', status: 'pending' },
-  ]
+  return getWorkflowSteps(kind)
 }
 
 export function applyCheckpoint(job: AgentJob, phase: string, summary: string, extras?: Partial<AgentJob>): AgentJob {

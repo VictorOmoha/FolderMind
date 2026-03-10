@@ -215,57 +215,14 @@ export interface AgentJob {
   dismissalReason?: string
 }
 
+import type { IpcApi, IpcEvents } from './main/ipcTypes'
+
 declare global {
   interface Window {
     foldermind: {
-      createFolder: () => Promise<SmartFolder | null>
-      openFolder: () => Promise<SmartFolder | null>
-      activateFolder: (folderPath: string) => Promise<SmartFolder | null>
-      getBriefing: (folderPath: string, folderName: string) => Promise<FolderBriefing>
-      getGitStatus: (folderPath: string) => Promise<GitStatus>
-      getConfig: (folderPath: string) => Promise<AgentConfig>
-      getChatHistory: (folderPath: string) => Promise<ChatMessage[]>
-      clearChatHistory: (folderPath: string) => Promise<boolean>
-      updateConfig: (folderPath: string, updates: Partial<Pick<AgentConfig, 'tone' | 'archetype' | 'goals' | 'constraints' | 'guardrails'>>) => Promise<AgentConfig>
-      listAgentJobs: (folderPath: string) => Promise<AgentJob[]>
-      listAgentEvents: (folderPath: string) => Promise<AgentRuntimeEvent[]>
-      runAgentJobs: (folderPath: string) => Promise<AgentJob[]>
-      approveAgentJob: (folderPath: string, jobId: string) => Promise<AgentJob[]>
-      retryAgentJob: (folderPath: string, jobId: string) => Promise<AgentJob[]>
-      dismissAgentJob: (folderPath: string, jobId: string, reason?: string) => Promise<AgentJob[]>
-      listTasks: (folderPath: string) => Promise<TaskItem[]>
-      addTask: (folderPath: string, text: string, options?: AddTaskOptions) => Promise<TaskItem[]>
-      updateTask: (folderPath: string, taskId: string, updates: { text?: string; status?: TaskStatus }) => Promise<TaskItem[]>
-      deleteTask: (folderPath: string, taskId: string) => Promise<TaskItem[]>
-      runTask: (folderPath: string, taskId: string) => Promise<{ response: string; tasks: TaskItem[] }>
-      openInExplorer: (folderPath: string, target: string) => Promise<void>
-      readMemory: (folderPath: string) => Promise<{ project: string; decisions: string; preferences: string; archivedAgentHistory: string }>
-      writeMemory: (folderPath: string, updates: { project?: string; decisions?: string; preferences?: string; archivedAgentHistory?: string }) => Promise<boolean>
-      setApiKey: (key: string) => Promise<boolean>
-      getAgentStatus: () => Promise<{ hasApiKey: boolean }>
-      transcribeVoice: (audioBase64: string) => Promise<{ jobId: string }>
-      getVoiceResult: (jobId: string) => Promise<{ status: 'processing' | 'completed' | 'failed'; text?: string; error?: string }>
-      speakText: (text: string) => Promise<{ jobId: string }>
-      getSpeechResult: (jobId: string) => Promise<{ status: 'processing' | 'completed' | 'failed'; audioBase64?: string; mimeType?: string; error?: string }>
-      chat: (folderPath: string, message: string, history: unknown[], memory: string) => Promise<string>
-      approve: (approvalId: string, approved: boolean) => Promise<boolean>
-      onToken: (cb: (token: string) => void) => () => void
-      onToolCall: (cb: (data: { name: string; args: unknown }) => void) => () => void
-      onToolResult: (cb: (data: { name: string; result: string }) => void) => () => void
-      onMemoryUpdated: (cb: (memory: string) => void) => () => void
-      onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => () => void
-      onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => () => void
-      onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => () => void
-      onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => () => void
-      onJobsUpdated: (cb: (data: { folderPath: string; jobs: AgentJob[] }) => void) => () => void
-      onEventsUpdated: (cb: (data: { folderPath: string; events: AgentRuntimeEvent[] }) => void) => () => void
-      onTasksUpdated: (cb: (data: { folderPath: string; tasks: TaskItem[] }) => void) => () => void
-      gitStageFile: (folderPath: string, filepath: string) => Promise<{ ok: boolean; output: string }>
-      gitUnstageFile: (folderPath: string, filepath: string) => Promise<{ ok: boolean; output: string }>
-      gitStageAll: (folderPath: string) => Promise<{ ok: boolean; output: string }>
-      gitCommit: (folderPath: string, message: string) => Promise<{ ok: boolean; output: string }>
-      gitPush: (folderPath: string) => Promise<{ ok: boolean; output: string }>
-      gitGetFileDiff: (folderPath: string, filepath: string, staged: boolean) => Promise<{ ok: boolean; diff: string }>
+      [K in keyof IpcApi]: IpcApi[K]
+    } & {
+      [K in keyof IpcEvents]: (cb: IpcEvents[K]) => () => void
     }
   }
 }

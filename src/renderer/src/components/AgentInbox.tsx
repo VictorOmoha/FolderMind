@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentJob, AgentRuntimeEvent, TaskItem } from '../../../../src/vite-env'
+import styles from './AgentInbox.module.css'
 
 interface Props {
   jobs: AgentJob[]
@@ -194,8 +195,8 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
   }, [filter, selectedJob, selectedJobId])
 
   return (
-    <section className="agent-inbox agent-card">
-      <div className="agent-inbox-header">
+    <section className={`${styles.inbox} agent-card`}>
+      <div className={styles.header}>
         <div>
           <h3>Agent Inbox</h3>
           <p className="muted">Watcher and git-driven jobs queued from workspace activity.</p>
@@ -203,7 +204,7 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
         <button className="btn-secondary" onClick={() => void onRunNow()}>Run now</button>
       </div>
 
-      <div className="agent-inbox-filters">
+      <div className={styles.filters}>
         {(['needs_action', 'all', 'history'] as InboxFilter[]).map((option) => (
           <button
             key={option}
@@ -218,40 +219,40 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
       {filteredJobs.length === 0 ? (
         <p className="muted">{filter === 'history' ? 'No completed history jobs yet.' : 'No autonomous jobs in this view yet.'}</p>
       ) : (
-        <div className="agent-inbox-grid">
-          <div className="agent-job-list">
+        <div className={styles.grid}>
+          <div className={styles.jobList}>
             {filteredJobs.map((job) => (
               <button
                 key={job.id}
-                className={`agent-job agent-job-${job.status} ${selectedJob?.id === job.id ? 'selected' : ''}`}
+                className={`${styles.job} ${styles[`job-${job.status}`] || ''} ${selectedJob?.id === job.id ? styles.selected : ''}`}
                 onClick={() => setSelectedJobId(job.id)}
               >
-                <div className="agent-job-top">
+                <div className={styles.jobTop}>
                   <strong>{job.title}</strong>
-                  <span className={`agent-job-status ${job.status}`}>{statusLabel(job)}</span>
+                  <span className={`${styles.jobStatus} ${styles[job.status] || ''}`}>{statusLabel(job)}</span>
                 </div>
-                <div className="agent-job-meta">{kindLabel(job.kind)} · {job.trigger}</div>
-                <div className="agent-job-meta">attempts: {job.attemptCount || 0}</div>
-                {planProgress(job) && <div className="agent-job-meta">{planProgress(job)}</div>}
-                {job.summary && <div className="agent-job-summary">{job.summary}</div>}
-                {job.command && <div className="agent-job-command"><code>{job.command}</code></div>}
+                <div className={styles.jobMeta}>{kindLabel(job.kind)} · {job.trigger}</div>
+                <div className={styles.jobMeta}>attempts: {job.attemptCount || 0}</div>
+                {planProgress(job) && <div className={styles.jobMeta}>{planProgress(job)}</div>}
+                {job.summary && <div className={styles.jobSummary}>{job.summary}</div>}
+                {job.command && <div className={styles.jobCommand}><code>{job.command}</code></div>}
               </button>
             ))}
             {archivedRoots.length > 0 && (
-              <div className="agent-job-archive">
-                <div className="agent-job-archive-title">Resolved Chains</div>
+              <div className={styles.archive}>
+                <div className={styles.archiveTitle}>Resolved Chains</div>
                 {archivedRoots.map((job) => (
                   <button
                     key={job.id}
-                    className={`agent-job agent-job-archived ${selectedJob?.id === job.id ? 'selected' : ''}`}
+                    className={`${styles.job} ${styles.jobArchived} ${selectedJob?.id === job.id ? styles.selected : ''}`}
                     onClick={() => setSelectedJobId(job.id)}
                   >
-                    <div className="agent-job-top">
+                    <div className={styles.jobTop}>
                       <strong>{job.title}</strong>
-                      <span className="agent-job-status completed">resolved</span>
+                      <span className={`${styles.jobStatus} ${styles.completed}`}>resolved</span>
                     </div>
-                    <div className="agent-job-meta">{kindLabel(job.kind)} · root chain</div>
-                    {job.chainResolutionReason && <div className="agent-job-summary">{job.chainResolutionReason}</div>}
+                    <div className={styles.jobMeta}>{kindLabel(job.kind)} · root chain</div>
+                    {job.chainResolutionReason && <div className={styles.jobSummary}>{job.chainResolutionReason}</div>}
                   </button>
                 ))}
               </div>
@@ -259,85 +260,85 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
           </div>
 
           {selectedJob && (
-            <div className="agent-job-detail">
-              <div className="agent-job-detail-head">
+            <div className={styles.jobDetail}>
+              <div className={styles.jobDetailHead}>
                 <strong>{selectedJob.title}</strong>
-                <span className={`agent-job-status ${selectedJob.status}`}>{statusLabel(selectedJob)}</span>
+                <span className={`${styles.jobStatus} ${styles[selectedJob.status] || ''}`}>{statusLabel(selectedJob)}</span>
               </div>
-              <div className="agent-job-meta">{kindLabel(selectedJob.kind)} · trigger: {selectedJob.trigger}</div>
-              <div className="agent-job-meta">reason: {selectedJob.reason}</div>
-              {selectedJob.attentionSummary && <div className="agent-job-meta">needs action: {selectedJob.attentionSummary}</div>}
-              {selectedJob.checkpoint && <div className="agent-job-meta">checkpoint: {selectedJob.checkpoint.phase} · {selectedJob.checkpoint.summary}</div>}
-              {planProgress(selectedJob) && <div className="agent-job-meta">progress: {planProgress(selectedJob)}</div>}
-              {selectedJob.chainResolvedAt && <div className="agent-job-meta">chain resolved: {new Date(selectedJob.chainResolvedAt).toLocaleString()}</div>}
-              {selectedJob.chainResolutionReason && <div className="agent-job-meta">chain reason: {selectedJob.chainResolutionReason}</div>}
-              {selectedJob.acknowledgedAt && <div className="agent-job-meta">acknowledged: {new Date(selectedJob.acknowledgedAt).toLocaleString()}</div>}
-              {selectedJob.acknowledgementReason && <div className="agent-job-meta">ack reason: {selectedJob.acknowledgementReason}</div>}
-              <div className="agent-job-meta">attempts: {selectedJob.attemptCount || 0}</div>
-              {selectedJob.rootJobId && <div className="agent-job-meta">root job: {selectedJob.rootJobId}</div>}
-              {selectedJob.parentJobId && <div className="agent-job-meta">parent job: {selectedJob.parentJobId}</div>}
-              {selectedJob.childJobIds && selectedJob.childJobIds.length > 0 && <div className="agent-job-meta">child jobs: {selectedJob.childJobIds.length}</div>}
-              {selectedJob.lastAttemptAt && <div className="agent-job-meta">last attempt: {new Date(selectedJob.lastAttemptAt).toLocaleString()}</div>}
-              {selectedJob.cooldownUntil && selectedJob.cooldownUntil > Date.now() && <div className="agent-job-meta">cooldown until: {new Date(selectedJob.cooldownUntil).toLocaleString()}</div>}
-              {selectedJob.relatedTaskId && <div className="agent-job-meta">linked task: {selectedJob.relatedTaskId}</div>}
-              {linkedSuggestedTask && <div className="agent-job-meta">task: {linkedSuggestedTask.text}</div>}
-              {selectedJob.filePaths.length > 0 && <div className="agent-job-files">{selectedJob.filePaths.join(', ')}</div>}
-              {selectedJob.verificationStatus && <div className={`agent-job-verification ${selectedJob.verificationStatus}`}>verification: {selectedJob.verificationStatus}</div>}
-              {selectedJob.command && <pre className="agent-job-command-block">{selectedJob.command}</pre>}
+              <div className={styles.jobMeta}>{kindLabel(selectedJob.kind)} · trigger: {selectedJob.trigger}</div>
+              <div className={styles.jobMeta}>reason: {selectedJob.reason}</div>
+              {selectedJob.attentionSummary && <div className={styles.jobMeta}>needs action: {selectedJob.attentionSummary}</div>}
+              {selectedJob.checkpoint && <div className={styles.jobMeta}>checkpoint: {selectedJob.checkpoint.phase} · {selectedJob.checkpoint.summary}</div>}
+              {planProgress(selectedJob) && <div className={styles.jobMeta}>progress: {planProgress(selectedJob)}</div>}
+              {selectedJob.chainResolvedAt && <div className={styles.jobMeta}>chain resolved: {new Date(selectedJob.chainResolvedAt).toLocaleString()}</div>}
+              {selectedJob.chainResolutionReason && <div className={styles.jobMeta}>chain reason: {selectedJob.chainResolutionReason}</div>}
+              {selectedJob.acknowledgedAt && <div className={styles.jobMeta}>acknowledged: {new Date(selectedJob.acknowledgedAt).toLocaleString()}</div>}
+              {selectedJob.acknowledgementReason && <div className={styles.jobMeta}>ack reason: {selectedJob.acknowledgementReason}</div>}
+              <div className={styles.jobMeta}>attempts: {selectedJob.attemptCount || 0}</div>
+              {selectedJob.rootJobId && <div className={styles.jobMeta}>root job: {selectedJob.rootJobId}</div>}
+              {selectedJob.parentJobId && <div className={styles.jobMeta}>parent job: {selectedJob.parentJobId}</div>}
+              {selectedJob.childJobIds && selectedJob.childJobIds.length > 0 && <div className={styles.jobMeta}>child jobs: {selectedJob.childJobIds.length}</div>}
+              {selectedJob.lastAttemptAt && <div className={styles.jobMeta}>last attempt: {new Date(selectedJob.lastAttemptAt).toLocaleString()}</div>}
+              {selectedJob.cooldownUntil && selectedJob.cooldownUntil > Date.now() && <div className={styles.jobMeta}>cooldown until: {new Date(selectedJob.cooldownUntil).toLocaleString()}</div>}
+              {selectedJob.relatedTaskId && <div className={styles.jobMeta}>linked task: {selectedJob.relatedTaskId}</div>}
+              {linkedSuggestedTask && <div className={styles.jobMeta}>task: {linkedSuggestedTask.text}</div>}
+              {selectedJob.filePaths.length > 0 && <div className={styles.jobFiles}>{selectedJob.filePaths.join(', ')}</div>}
+              {selectedJob.verificationStatus && <div className={`${styles.jobVerification} ${styles[selectedJob.verificationStatus] || ''}`}>verification: {selectedJob.verificationStatus}</div>}
+              {selectedJob.command && <pre className={styles.jobCommandBlock}>{selectedJob.command}</pre>}
               {relevantEvents.length > 0 && (
-                <div className="agent-job-panels">
-                  <section className="agent-job-panel">
-                    <div className="agent-job-panel-head">
-                      <span className="agent-job-panel-title">Runtime Events</span>
+                <div className={styles.panels}>
+                  <section className={styles.panel}>
+                    <div className={styles.panelHead}>
+                      <span className={styles.panelTitle}>Runtime Events</span>
                     </div>
-                    <div className="agent-job-panel-body">
+                    <div className={styles.panelBody}>
                       {relevantEvents.map((event) => `[${eventLevelLabel(event.level)}] ${new Date(event.ts).toLocaleTimeString()} ${event.message}`).join('\n')}
                     </div>
                   </section>
                 </div>
               )}
               {selectedJob.planSteps && selectedJob.planSteps.length > 0 && (
-                <div className="agent-job-panels">
-                  <section className="agent-job-panel">
-                    <div className="agent-job-panel-head">
-                      <span className="agent-job-panel-title">Execution Plan</span>
+                <div className={styles.panels}>
+                  <section className={styles.panel}>
+                    <div className={styles.panelHead}>
+                      <span className={styles.panelTitle}>Execution Plan</span>
                     </div>
-                    <div className="agent-job-panel-body">
+                    <div className={styles.panelBody}>
                       {selectedJob.planSteps.map((step) => `${step.status === 'done' ? '[x]' : step.status === 'active' ? '[>]' : '[ ]'} ${step.label}`).join('\n')}
                     </div>
                   </section>
                 </div>
               )}
               {selectedJob.stepArtifacts && selectedJob.stepArtifacts.length > 0 && (
-                <div className="agent-job-panels">
+                <div className={styles.panels}>
                   {selectedJob.stepArtifacts.map((artifact) => (
-                    <section key={artifact.id} className="agent-job-panel">
-                      <div className="agent-job-panel-head">
-                        <span className="agent-job-panel-title">{artifact.title}</span>
+                    <section key={artifact.id} className={styles.panel}>
+                      <div className={styles.panelHead}>
+                        <span className={styles.panelTitle}>{artifact.title}</span>
                       </div>
-                      <div className="agent-job-meta">{artifact.phase} · {new Date(artifact.createdAt).toLocaleTimeString()}</div>
-                      <div className="agent-job-panel-body">{artifact.body}</div>
+                      <div className={styles.jobMeta}>{artifact.phase} · {new Date(artifact.createdAt).toLocaleTimeString()}</div>
+                      <div className={styles.panelBody}>{artifact.body}</div>
                     </section>
                   ))}
                 </div>
               )}
               {panels.length > 0 && (
-                <div className="agent-job-panels">
+                <div className={styles.panels}>
                   {panels.map((panel) => (
-                    <section key={panel.title} className="agent-job-panel">
-                      <div className="agent-job-panel-head">
-                        <span className="agent-job-panel-title">{panel.title}</span>
-                        <div className="agent-job-panel-actions">
+                    <section key={panel.title} className={styles.panel}>
+                      <div className={styles.panelHead}>
+                        <span className={styles.panelTitle}>{panel.title}</span>
+                        <div className={styles.panelActions}>
                           {panel.copyValue && <button className="btn-secondary" onClick={() => void copyText(panel.copyValue)}>Copy</button>}
                           {panel.taskText && <button className="btn-secondary" onClick={() => void onCreateTask(panel.taskText)}>Task</button>}
                         </div>
                       </div>
-                      <div className="agent-job-panel-body">{panel.body}</div>
+                      <div className={styles.panelBody}>{panel.body}</div>
                     </section>
                   ))}
                 </div>
               )}
-              <div className="agent-job-actions">
+              <div className={styles.jobActions}>
                 {selectedJob.approvalRequired && !selectedJob.approved && selectedJob.status === 'blocked' && (
                   <button className="btn-primary" onClick={() => void onApproveJob(selectedJob.id)}>Approve And Run</button>
                 )}
@@ -373,9 +374,9 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
                   </button>
                 )}
               </div>
-              {selectedJob.dismissalReason && <div className="agent-job-error">{selectedJob.dismissalReason}</div>}
-              {selectedJob.result && <pre className="agent-job-result">{selectedJob.result}</pre>}
-              {selectedJob.error && !selectedJob.result && <div className="agent-job-error">{selectedJob.error}</div>}
+              {selectedJob.dismissalReason && <div className={styles.jobError}>{selectedJob.dismissalReason}</div>}
+              {selectedJob.result && <pre className={styles.jobResult}>{selectedJob.result}</pre>}
+              {selectedJob.error && !selectedJob.result && <div className={styles.jobError}>{selectedJob.error}</div>}
             </div>
           )}
         </div>

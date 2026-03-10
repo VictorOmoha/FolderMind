@@ -3,7 +3,7 @@ import { existsSync } from 'fs'
 import { basename, join, relative } from 'path'
 import { promisify } from 'util'
 import { hasApiKey } from './agent'
-import { buildJobContext, executeJob, queueCommitPrepFollowUp, queueDocsDriftFollowUp, queueVerificationFollowUpFromAnalysis } from './runtimeEngine'
+import { executeJob, queueConfiguredFollowUps } from './runtimeEngine'
 import { detectTestCommand, findCommandRule, getRuntimePolicy } from './runtimePolicy'
 import {
   applyCheckpoint,
@@ -11,8 +11,6 @@ import {
   completeJobPlan,
   deriveAttentionState,
   deriveSuggestedTasks,
-  firstStructuredLine,
-  inferVerificationCommandFromResult,
   parseStructuredResult,
   withStepArtifact,
 } from './runtimeWorkflow'
@@ -422,9 +420,7 @@ async function runNextJob(folderPath: string, deps: RuntimeDeps) {
       if (suggestedTasks.length > 0) {
         deps.onTasksSuggested?.(folderPath, completedJob, suggestedTasks)
       }
-      queueVerificationFollowUpFromAnalysis(folderPath, completedJob, deps, () => { void runNextJob(folderPath, deps) })
-      queueDocsDriftFollowUp(folderPath, completedJob, deps, () => { void runNextJob(folderPath, deps) })
-      void queueCommitPrepFollowUp(folderPath, completedJob, deps, () => { void runNextJob(folderPath, deps) })
+      void queueConfiguredFollowUps(folderPath, completedJob, deps, () => { void runNextJob(folderPath, deps) })
     }
   } catch (error) {
     const refreshedJobs = readJobs(folderPath)
