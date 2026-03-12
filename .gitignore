@@ -8,3 +8,7 @@ functions/.env
 *.local
 .DS_Store
 Thumbs.db
+
+# Temp logs and patches
+dev.log
+patch*.js
