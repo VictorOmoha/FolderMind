@@ -3,6 +3,7 @@ import type { TaskItem, TaskRun } from '../../../src/vite-env'
 import type { TaskSidebarProps, TaskRunSectionsProps, PlanSnapshotListProps, ActivityLogListProps } from './chatPanelTypes'
 import { formatDuration } from './chatPanelUtils'
 import { DiffViewer } from './DiffViewer'
+import styles from './TaskSidebar.module.css'
 
 // ── File type icon helper ────────────────────────────────────────
 function fileIcon(filepath: string): string {
@@ -60,12 +61,12 @@ function FileItem({
   }
 
   return (
-    <li className={`task-run-file-item${dim ? ' dim' : ''}`} title={`Open ${file} in Explorer`}>
-      <span className="task-run-file-icon">{fileIcon(file)}</span>
-      <button className="task-run-file-path-btn" onClick={handleOpen}>
+    <li className={`${styles.fileItem}${dim ? ` ${styles.dim}` : ''}`} title={`Open ${file} in Explorer`}>
+      <span className={styles.fileIcon}>{fileIcon(file)}</span>
+      <button className={styles.filePathBtn} onClick={handleOpen}>
         {file}
       </button>
-      {badge && <span className="task-run-file-badge">{badge}</span>}
+      {badge && <span className={styles.fileBadge}>{badge}</span>}
     </li>
   )
 }
@@ -84,12 +85,12 @@ function TaskRunSections({ run, folderPath }: TaskRunSectionsProps) {
     <>
       {/* ── File Changes (diff viewer) ── */}
       {fileEdits.length > 0 && (
-        <div className="task-run-section">
-          <div className="task-run-label">
+        <div className={styles.runSection}>
+          <div className={styles.runLabel}>
             File changes
-            <span className="task-run-label-count">{fileEdits.length}</span>
+            <span className={styles.runLabelCount}>{fileEdits.length}</span>
           </div>
-          <div className="task-run-diffs">
+          <div className={styles.runDiffs}>
             {fileEdits.map((entry, index) => (
               <DiffViewer
                 key={`${entry.ts}-${index}`}
@@ -105,12 +106,12 @@ function TaskRunSections({ run, folderPath }: TaskRunSectionsProps) {
 
       {/* ── Files touched ── */}
       {run.filesTouched && run.filesTouched.length > 0 && (
-        <div className="task-run-section">
-          <div className="task-run-label">
+        <div className={styles.runSection}>
+          <div className={styles.runLabel}>
             Files touched
-            <span className="task-run-label-count">{run.filesTouched.length}</span>
+            <span className={styles.runLabelCount}>{run.filesTouched.length}</span>
           </div>
-          <ul className="task-run-file-list">
+          <ul className={styles.fileList}>
             {run.filesTouched.map((file) => (
               <FileItem
                 key={file}
@@ -125,19 +126,19 @@ function TaskRunSections({ run, folderPath }: TaskRunSectionsProps) {
 
       {/* ── Commands ── */}
       {run.commands && run.commands.length > 0 && (
-        <div className="task-run-section">
-          <div className="task-run-label">Commands</div>
-          <ul>{run.commands.map((cmd) => <li key={cmd}><code>{cmd}</code></li>)}</ul>
+        <div className={styles.runSection}>
+          <div className={styles.runLabel}>Commands</div>
+          <ul className={styles.fileList}>{run.commands.map((cmd) => <li key={cmd} className={styles.fileItem}><code>{cmd}</code></li>)}</ul>
         </div>
       )}
 
       {/* ── Execution trace (non-diff entries) ── */}
       {plainTrace.length > 0 && (
-        <div className="task-run-section">
-          <div className="task-run-label">Execution trace</div>
-          <ul>
+        <div className={styles.runSection}>
+          <div className={styles.runLabel}>Execution trace</div>
+          <ul className={styles.fileList}>
             {plainTrace.slice(-12).map((entry, index) => (
-              <li key={`${entry.ts}-${index}`}>{entry.detail}</li>
+              <li key={`${entry.ts}-${index}`} className={styles.fileItem}>{entry.detail}</li>
             ))}
           </ul>
         </div>
@@ -152,15 +153,15 @@ function TaskRunSections({ run, folderPath }: TaskRunSectionsProps) {
 // ── Plan snapshots ───────────────────────────────────────────────
 function PlanSnapshotList({ snapshots }: PlanSnapshotListProps) {
   return (
-    <div className="task-run-section">
-      <div className="task-run-label">Plan snapshots</div>
-      <ul>
+    <div className={styles.runSection}>
+      <div className={styles.runLabel}>Plan snapshots</div>
+      <ul className={styles.fileList}>
         {snapshots.slice(-4).map((snapshot, index) => (
-          <li key={`${snapshot.ts}-${index}`}>
+          <li key={`${snapshot.ts}-${index}`} className={styles.fileItem} style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
             <strong>{snapshot.goal}</strong>
-            <ul>
+            <ul className={styles.fileList} style={{ marginTop: '4px', width: '100%' }}>
               {snapshot.steps.map((step) => (
-                <li key={step.id}>{step.status}: {step.text}</li>
+                <li key={step.id} className={styles.fileItem}>{step.status}: {step.text}</li>
               ))}
             </ul>
           </li>
@@ -173,11 +174,11 @@ function PlanSnapshotList({ snapshots }: PlanSnapshotListProps) {
 // ── Activity log ─────────────────────────────────────────────────
 function ActivityLogList({ entries }: ActivityLogListProps) {
   return (
-    <div className="task-run-section">
-      <div className="task-run-label">Activity log</div>
-      <ul>
+    <div className={styles.runSection}>
+      <div className={styles.runLabel}>Activity log</div>
+      <ul className={styles.fileList}>
         {entries.slice(-10).map((entry, index) => (
-          <li key={`${entry.ts}-${index}`}>{entry.kind}: {entry.message}</li>
+          <li key={`${entry.ts}-${index}`} className={styles.fileItem}>{entry.kind}: {entry.message}</li>
         ))}
       </ul>
     </div>
@@ -194,12 +195,12 @@ function TaskFootprint({ task, folderPath }: { task: TaskItem; folderPath: strin
   const hasMore = files.length > 6
 
   return (
-    <div className="task-footprint">
-      <div className="task-footprint-header">
-        <span className="task-footprint-title">Task footprint</span>
-        <span className="task-run-label-count">{files.length} file{files.length !== 1 ? 's' : ''}</span>
+    <div className={styles.footprint}>
+      <div className={styles.footprintHeader}>
+        <span className={styles.footprintTitle}>Task footprint</span>
+        <span className={styles.runLabelCount}>{files.length} file{files.length !== 1 ? 's' : ''}</span>
       </div>
-      <ul className="task-run-file-list">
+      <ul className={styles.fileList}>
         {visible.map(({ file, runCount, hasDiff }) => (
           <FileItem
             key={file}
@@ -210,12 +211,25 @@ function TaskFootprint({ task, folderPath }: { task: TaskItem; folderPath: strin
         ))}
       </ul>
       {hasMore && (
-        <button className="task-footprint-more" onClick={() => setExpanded((e) => !e)}>
+        <button className={styles.footprintMore} onClick={() => setExpanded((e) => !e)}>
           {expanded ? 'Show less' : `+${files.length - 6} more files`}
         </button>
       )}
     </div>
   )
+}
+
+function taskStatusLabel(task: TaskItem) {
+  if (task.status === 'suggested') return 'suggested'
+  return task.status
+}
+
+function taskSourceLabel(task: TaskItem) {
+  return task.source === 'agent' ? 'agent' : 'user'
+}
+
+function formatArchivedChainLabel(task: TaskItem) {
+  return task.archivedFromJobId ? `Archived from resolved chain ${task.archivedFromJobId}.` : null
 }
 
 // ── Main TaskSidebar ─────────────────────────────────────────────
@@ -236,9 +250,13 @@ export function TaskSidebar({
   onToggleTask,
   onDeleteTask,
   onRunTask,
+  onSelectJob,
+  jobs,
   hasApiKey,
 }: TaskSidebarProps) {
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || null
+  const originatingJob = selectedTask?.suggestedByJobId ? jobs.find((job) => job.id === selectedTask.suggestedByJobId) || null : null
+  const archivedChainLabel = selectedTask ? formatArchivedChainLabel(selectedTask) : null
   const completedRuns = selectedTask?.runs?.filter((run) => run.status === 'completed').length || 0
   const failedRuns = selectedTask?.runs?.filter((run) => run.status === 'failed').length || 0
 
@@ -247,38 +265,38 @@ export function TaskSidebar({
       {/* ── Task list ── */}
       <section className="agent-card">
         <h3>Tasks</h3>
-        <div className="task-create-row">
+        <div className={styles.createRow}>
           <input
-            className="task-input"
+            className={styles.input}
             value={taskInput}
             onChange={(e) => setTaskInput(e.target.value)}
             placeholder="Add a task..."
           />
           <button className="btn-primary" onClick={submitTask}>Add</button>
         </div>
-        <div className="task-list">
+        <div className={styles.list}>
           {tasks.length === 0 ? (
             <p className="muted">No tasks yet.</p>
           ) : (
             tasks.slice(0, 8).map((task) => (
               <div
                 key={task.id}
-                className={`task-item ${task.status} ${selectedTaskId === task.id ? 'selected' : ''}`}
+                className={`${styles.item} ${styles[task.status] || ''} ${selectedTaskId === task.id ? styles.selected : ''}`}
                 onClick={() => setSelectedTaskId(task.id)}
               >
-                <div className="task-main">
+                <div className={styles.main}>
                   {editingTaskId === task.id ? (
-                    <div className="task-edit-row" onClick={(e) => e.stopPropagation()}>
+                    <div className={styles.editRow} onClick={(e) => e.stopPropagation()}>
                       <input
-                        className="task-input"
+                        className={styles.input}
                         value={editingTaskText}
                         onChange={(e) => setEditingTaskText(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') void commitTaskEdit(task) }}
                         autoFocus
                       />
-                      <div className="task-inline-actions">
-                        <button className="btn-ghost-inline" onClick={() => void commitTaskEdit(task)}>Save</button>
-                        <button className="btn-ghost-inline danger" onClick={cancelTaskEdit}>Cancel</button>
+                      <div className={styles.actions}>
+                        <button className={styles.btnGhost} onClick={() => void commitTaskEdit(task)}>Save</button>
+                        <button className={`${styles.btnGhost} ${styles.danger}`} onClick={cancelTaskEdit}>Cancel</button>
                       </div>
                     </div>
                   ) : (
@@ -291,25 +309,35 @@ export function TaskSidebar({
                       <span>{task.text}</span>
                     </label>
                   )}
+                  <div className={styles.runMeta}>
+                    {taskStatusLabel(task)} · {taskSourceLabel(task)}
+                    {task.status === 'suggested' ? ' · review before running' : ''}
+                  </div>
                   {task.runs && task.runs.length > 0 && (
-                    <div className="task-run-meta">
+                    <div className={styles.runMeta}>
                       Last run: {task.runs[0].status}
                       {task.runs[0].summary ? ` · ${task.runs[0].summary.slice(0, 80)}` : ''}
                     </div>
                   )}
                 </div>
-                <div className="task-actions">
+                <div className={styles.actions}>
                   <button
-                    className="btn-ghost-inline"
+                    className={styles.btnGhost}
                     onClick={(e) => { e.stopPropagation(); startEditingTask(task) }}
                   >Edit</button>
+                  {task.status === 'suggested' && (
+                    <button
+                      className={styles.btnGhost}
+                      onClick={(e) => { e.stopPropagation(); onToggleTask(task) }}
+                    >Accept</button>
+                  )}
                   <button
-                    className="btn-ghost-inline"
+                    className={styles.btnGhost}
                     onClick={(e) => { e.stopPropagation(); void onRunTask(task) }}
-                    disabled={!hasApiKey}
+                    disabled={!hasApiKey || task.status === 'suggested'}
                   >Run</button>
                   <button
-                    className="btn-ghost-inline danger"
+                    className={`${styles.btnGhost} ${styles.danger}`}
                     onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id) }}
                   >Delete</button>
                 </div>
@@ -325,33 +353,43 @@ export function TaskSidebar({
         {!selectedTask ? (
           <p className="muted">Select a task to inspect its run history.</p>
         ) : (
-          <div className="task-detail">
-            <div className="task-detail-title">{selectedTask.text}</div>
-            <div className="task-detail-status">Status: {selectedTask.status}</div>
+          <div className={styles.detail}>
+            <div className={styles.detailTitle}>{selectedTask.text}</div>
+            <div className={styles.detailStatus}>Status: {selectedTask.status} · {taskSourceLabel(selectedTask)}</div>
+            {selectedTask.status === 'suggested' && <div className={styles.runSummary}>This task was suggested by the agent. Accept it before running, or delete it to dismiss the suggestion.</div>}
+            {originatingJob && (
+              <div className={styles.runSummary}>
+                Originating job: {originatingJob.title}
+                {onSelectJob && <button className={styles.btnGhost} onClick={() => onSelectJob(originatingJob.id)}>Open Job</button>}
+              </div>
+            )}
+            {!originatingJob && archivedChainLabel && (
+              <div className={styles.runSummary}>{archivedChainLabel}</div>
+            )}
 
-            <div className="task-detail-metrics">
-              <span className="task-metric success">{completedRuns} completed</span>
-              <span className="task-metric failure">{failedRuns} failed</span>
-              <span className="task-metric neutral">{selectedTask.runs?.length || 0} total runs</span>
+            <div className={styles.metrics}>
+              <span className={`${styles.metric} ${styles.success}`}>{completedRuns} completed</span>
+              <span className={`${styles.metric} ${styles.failure}`}>{failedRuns} failed</span>
+              <span className={`${styles.metric} ${styles.neutral}`}>{selectedTask.runs?.length || 0} total runs</span>
             </div>
 
             {/* ── Task footprint (aggregate across all runs) ── */}
             <TaskFootprint task={selectedTask} folderPath={folderPath} />
 
             {/* ── Per-run cards ── */}
-            <div className="task-run-list">
+            <div className={styles.runList}>
               {selectedTask.runs && selectedTask.runs.length > 0 ? (
                 selectedTask.runs.map((run) => (
-                  <div key={run.id} className={`task-run-card ${run.status}`}>
-                    <div className="task-run-head">
+                  <div key={run.id} className={`${styles.runCard} ${styles[run.status] || ''}`}>
+                    <div className={styles.runHead}>
                       <span>{run.status} · {new Date(run.startedAt).toLocaleString()}</span>
-                      <span className={`task-run-badge ${run.status}`}>{run.status}</span>
+                      <span className={`${styles.runBadge} ${styles[run.status] || ''}`}>{run.status}</span>
                     </div>
-                    <div className="task-run-subhead">
+                    <div className={styles.runSubhead}>
                       Duration: {formatDuration(run.durationMs)}
                       {run.completedAt ? ` · Finished ${new Date(run.completedAt).toLocaleTimeString()}` : ''}
                     </div>
-                    {run.summary && <div className="task-run-summary">{run.summary}</div>}
+                    {run.summary && <div className={styles.runSummary}>{run.summary}</div>}
                     <TaskRunSections run={run} folderPath={folderPath} />
                   </div>
                 ))

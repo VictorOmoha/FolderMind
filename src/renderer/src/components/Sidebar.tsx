@@ -1,4 +1,5 @@
 import type { SmartFolder } from '../hooks/useFolder'
+import styles from './Sidebar.module.css'
 
 interface Props {
   activeFolder: SmartFolder | null
@@ -11,37 +12,47 @@ interface Props {
 
 export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFolder, onSelectFolder, onOpenSettings }: Props) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <span className="logo">🗂️ FolderMind</span>
+    <aside className={styles.sidebar}>
+      <div className={styles.header}>
+        <span className={styles.logo}>🗂️ FolderMind</span>
       </div>
 
-      <div className="sidebar-actions">
+      <div className={styles.actions}>
         <button className="btn-primary" onClick={onCreateFolder}>+ New Smart Folder</button>
         <button className="btn-secondary" onClick={onOpenFolder}>Open Folder</button>
         <button className="btn-secondary" onClick={onOpenSettings}>Settings</button>
       </div>
 
       {recentFolders.length > 0 && (
-        <div className="sidebar-section">
-          <span className="sidebar-label">Recent</span>
+        <div className={styles.section}>
+          <span className={styles.label}>Recent</span>
           {recentFolders.map(folder => (
             <button
               key={folder.path}
-              className={`folder-item ${activeFolder?.path === folder.path ? 'active' : ''}`}
+              className={`${styles.folderItem} ${activeFolder?.path === folder.path ? styles.active : ''}`}
               onClick={() => onSelectFolder(folder)}
               title={folder.path}
             >
               <span className="folder-icon">📁</span>
-              <span className="folder-name">{folder.name}</span>
+              <span className={styles.folderName}>{folder.name}</span>
             </button>
           ))}
         </div>
       )}
 
-      <div className="sidebar-footer">
-        {activeFolder ? <div className="sidebar-active-folder"><span className="sidebar-label">Active Folder</span><span className="sidebar-active-name">{activeFolder.name}</span><span className="sidebar-active-path" title={activeFolder.path}>{activeFolder.path}</span></div> : <div className="sidebar-empty-hint">Open a folder to activate memory, briefing, tasks, and agent tools.</div>}
-        <span className="version">v0.1.0 — Local-first v1</span>
+      <div className={styles.footer}>
+        {activeFolder ? (
+          <div className={styles.activeFolder}>
+            <span className={styles.label}>Active Folder</span>
+            <span className={styles.activeName}>{activeFolder.name}</span>
+            <span className={styles.activePath} title={activeFolder.path}>{activeFolder.path}</span>
+          </div>
+        ) : (
+          <div className={styles.emptyHint}>
+            Open a folder to activate memory, briefing, tasks, and agent tools.
+          </div>
+        )}
+        <span className={styles.version}>v0.1.0 — Local-first v1</span>
       </div>
     </aside>
   )

@@ -1,4 +1,4 @@
-import type { TaskItem, TaskRun, TaskRunActivityEntry, TaskRunPlanSnapshot } from '../../../src/vite-env'
+import type { AgentJob, TaskItem, TaskRun, TaskRunActivityEntry, TaskRunPlanSnapshot } from '../../../src/vite-env'
 import type { RefObject } from 'react'
 
 export interface Message {
@@ -39,6 +39,7 @@ export interface ApprovalRequest {
 export interface TaskSidebarProps {
   folderPath: string
   tasks: TaskItem[]
+  jobs: AgentJob[]
   selectedTaskId: string | null
   setSelectedTaskId: (taskId: string) => void
   editingTaskId: string | null
@@ -53,6 +54,7 @@ export interface TaskSidebarProps {
   onToggleTask: (task: TaskItem) => void
   onDeleteTask: (taskId: string) => void
   onRunTask: (task: TaskItem) => Promise<void>
+  onSelectJob?: (jobId: string) => void
   hasApiKey: boolean
 }
 

@@ -5,9 +5,10 @@
   "author": "Omoha Solutions",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev -- --no-sandbox",
     "build": "electron-vite build && electron-builder",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -16,6 +17,8 @@
     "firebase": "^10.12.0",
     "mime-types": "^3.0.2",
     "openai": "^4.47.0",
+    "puppeteer": "^24.39.0",
+    "puppeteer-core": "^24.39.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -24,11 +27,15 @@
     "@types/mime-types": "^3.0.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
     "@vitejs/plugin-react": "^4.3.1",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
     "electron-icon-builder": "^2.0.1",
     "electron-vite": "^2.3.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.34.5",
     "typescript": "^5.5.3",

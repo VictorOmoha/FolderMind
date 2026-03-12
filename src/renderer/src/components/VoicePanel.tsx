@@ -1,3 +1,5 @@
+import styles from './VoicePanel.module.css'
+
 interface Props {
   listening: boolean
   transcribing: boolean
@@ -13,13 +15,6 @@ interface Props {
 }
 
 type VoiceState = 'idle' | 'listening' | 'transcribing' | 'speaking'
-
-function getState(p: Props): VoiceState {
-  if (p.listening) return 'listening'
-  if (p.transcribing) return 'speaking' === p.speaking as any ? 'speaking' : 'transcribing'
-  if (p.speaking) return 'speaking'
-  return 'idle'
-}
 
 const STATE_LABEL: Record<VoiceState, string> = {
   idle: 'Tap mic · or press Space',
@@ -57,35 +52,35 @@ export function VoicePanel({
     : 'idle'
 
   return (
-    <section className="agent-card voice-panel">
+    <section className={`agent-card ${styles.panel}`}>
       <h3>Voice</h3>
 
       {/* ── Mic button ── */}
-      <div className="voice-mic-wrap">
+      <div className={styles.micWrap}>
         <button
-          className={`voice-mic-btn ${state}`}
+          className={`${styles.micBtn} ${styles[state] || ''}`}
           onClick={onToggle}
           disabled={!hasApiKey || transcribing}
           aria-label={state === 'listening' ? 'Stop recording' : 'Start recording'}
           title={!hasApiKey ? 'Add your OpenAI API key to enable voice' : undefined}
         >
-          <span className="voice-mic-icon">{STATE_ICON[state]}</span>
-          {state === 'listening' && <span className="voice-mic-ring" />}
+          <span className={styles.micIcon}>{STATE_ICON[state]}</span>
+          {state === 'listening' && <span className={styles.micRing} />}
         </button>
-        <span className={`voice-state-label ${state}`}>{STATE_LABEL[state]}</span>
+        <span className={`${styles.stateLabel} ${styles[state] || ''}`}>{STATE_LABEL[state]}</span>
       </div>
 
       {/* ── Toggles ── */}
-      <div className="voice-toggles">
+      <div className={styles.toggles}>
         <button
-          className={`voice-toggle-pill ${voiceRepliesEnabled ? 'on' : 'off'}`}
+          className={`${styles.togglePill} ${voiceRepliesEnabled ? styles.on : ''}`}
           onClick={onToggleReplies}
           disabled={transcribing}
         >
           {voiceRepliesEnabled ? '🔊 Replies' : '🔇 Replies'}
         </button>
         <button
-          className={`voice-toggle-pill ${voiceAutoMode ? 'on' : 'off'}`}
+          className={`${styles.togglePill} ${voiceAutoMode ? styles.on : ''}`}
           onClick={onToggleAutoMode}
           disabled={listening || transcribing}
         >
@@ -95,14 +90,14 @@ export function VoicePanel({
 
       {/* ── Last transcript ── */}
       {lastTranscript && (
-        <div className="voice-transcript">
-          <span className="voice-transcript-label">Heard</span>
-          <span className="voice-transcript-text">"{lastTranscript}"</span>
+        <div className={styles.transcript}>
+          <span className={styles.transcriptLabel}>Heard</span>
+          <span className={styles.transcriptText}>"{lastTranscript}"</span>
         </div>
       )}
 
       {/* ── Error ── */}
-      {error && <div className="voice-error">{error}</div>}
+      {error && <div className={styles.error}>{error}</div>}
 
       {/* ── No API key hint ── */}
       {!hasApiKey && (
