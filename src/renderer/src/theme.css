@@ -1,18 +1,18 @@
 :root {
-  --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --surface2: #242424;
-  --surface3: #161616;
-  --border: #2a2a2a;
-  --accent: #6366f1;
-  --accent-hover: #4f52d0;
-  --text: #f0f0f0;
-  --text-muted: #888;
-  --green: #22c55e;
-  --yellow: #fbbc04;
-  --red: #ef4444;
-  --radius: 10px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --bg: #09090b; /* Deep dark background */
+  --surface: rgba(24, 24, 27, 0.65); /* Glass surface */
+  --surface2: rgba(39, 39, 42, 0.75); /* Slightly lighter glass */
+  --surface3: rgba(63, 63, 70, 0.8);
+  --border: rgba(255, 255, 255, 0.1); /* Subtle bright borders */
+  --accent: #818cf8; /* Vibrant indigo */
+  --accent-hover: #6366f1;
+  --text: #f8fafc; /* Crisp white */
+  --text-muted: #94a3b8; /* Soft blue-grey */
+  --green: #4ade80;
+  --yellow: #facc15;
+  --red: #f87171;
+  --radius: 12px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

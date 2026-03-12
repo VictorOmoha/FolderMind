@@ -5,6 +5,7 @@ import { promisify } from 'util'
 import { hasApiKey } from './agent'
 import { executeJob, queueConfiguredFollowUps } from './runtimeEngine'
 import { detectTestCommand, findCommandRule, getRuntimePolicy } from './runtimePolicy'
+import { updateIndexForFiles } from './ragIndexer'
 import {
   applyCheckpoint,
   buildJobPlan,
@@ -179,6 +180,13 @@ function queueChangeDrivenJobs(folderPath: string, changes: FolderChangeEvent[],
   let jobs = readJobs(folderPath)
   let rootJobId: string | undefined
   const relFiles = Array.from(new Set(changes.map((change) => relative(folderPath, change.filePath)).filter(Boolean))).slice(0, 10)
+  
+  if (relFiles.length > 0) {
+    updateIndexForFiles(folderPath, relFiles).catch(err => {
+      appendRuntimeEvent(folderPath, deps, { level: 'error', type: 'job_failed', jobId: 'index', rootJobId: 'index', message: `Background index update failed: ${err.message}` })
+    })
+  }
+
   const isGitFolder = existsSync(join(folderPath, '.git'))
 
   if (policy.autoRunFileReview) {

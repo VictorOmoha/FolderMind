@@ -1,6 +1,6 @@
 .panel {
   border-bottom: 1px solid var(--border);
-  background: #0b0b0b;
+  background: transparent;
 }
 .header {
   display: flex;
