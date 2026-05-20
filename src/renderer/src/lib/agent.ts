@@ -149,9 +149,13 @@ export async function streamChat(
   let toolCallBuffer: { id: string; name: string; args: string } | null = null
   let finishReason = ''
 
-  while (true) {
+  let reading = true
+  while (reading) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      reading = false
+      continue
+    }
 
     const chunk = decoder.decode(value)
     const lines = chunk.split('\n').filter(l => l.startsWith('data: '))

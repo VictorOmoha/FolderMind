@@ -1,8 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
-import { join, relative } from 'path'
+import { join, relative, resolve } from 'path'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, readdirSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import * as http from 'http'
+import * as dotenv from 'dotenv'
 import { lookup } from 'mime-types'
 import chokidar from 'chokidar'
 import { OpenAI } from 'openai'
@@ -15,8 +16,8 @@ const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 
 try {
-  require('dotenv').config({ path: join(process.cwd(), '.env') })
-  require('dotenv').config({ path: join(__dirname, '../../.env') })
+  dotenv.config({ path: join(process.cwd(), '.env') })
+  dotenv.config({ path: join(__dirname, '../../.env') })
 } catch (e) {
   console.error('Dotenv error:', e)
 }
@@ -70,11 +71,22 @@ interface TaskItem { id: string; text: string; status: TaskStatus; source?: Task
 interface AddTaskOptions { source?: TaskSource; suggestedByJobId?: string; archivedFromJobId?: string }
 interface ChatMessage { role: 'user' | 'assistant'; content: string; ts: number }
 interface StructuredMemory { project: string; decisions: string; preferences: string; archivedAgentHistory: string; tasks: { items: TaskItem[] } }
+interface FlattenableMemory {
+  project: string
+  decisions: string
+  preferences: string
+  tasks: { items: Array<{ text: string; status: TaskStatus }> }
+  archivedAgentHistory?: string
+}
 interface GitStatus { isRepo: boolean; branch: string | null; changedFiles: string[]; stagedFiles: string[]; untrackedFiles: string[]; aheadBehind: string | null; suggestedCommitMessage: string | null }
 interface FolderBriefing { summary: string; fileCount: number; topFiles: string[]; recentChanges: string[]; suggestions: string[]; keyDecisions: string[]; openTasks: string[]; git: GitStatus }
 interface FolderChangeEvent { event: string; filePath: string; ts: number }
 interface AgentJobsPayload { folderPath: string; jobs: AgentJob[] }
 interface AgentEventsPayload { folderPath: string; events: AgentRuntimeEvent[] }
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
 
 const IGNORED_DIRS = new Set(['.foldermind', '.git', 'node_modules', 'dist', 'out', 'release'])
 
@@ -110,6 +122,30 @@ const folderChangeLog = new Map<string, FolderChangeEvent[]>()
 const AGENT_DIR = '.foldermind'
 const voiceTranscriptions = new Map<string, { status: 'processing' | 'completed' | 'failed'; text?: string; error?: string }>()
 const voiceSpeech = new Map<string, { status: 'processing' | 'completed' | 'failed'; audioBase64?: string; mimeType?: string; error?: string }>()
+
+function assertActiveFolderPath(folderPath: string) {
+  if (typeof folderPath !== 'string' || !folderPath.trim()) {
+    throw new Error('A folder path is required.')
+  }
+  const resolvedFolderPath = resolve(folderPath)
+  if (!existsSync(resolvedFolderPath)) {
+    throw new Error('Folder does not exist.')
+  }
+  if (!activeFolderPath || resolve(activeFolderPath) !== resolvedFolderPath) {
+    throw new Error('Folder is not the active FolderMind workspace.')
+  }
+  return resolvedFolderPath
+}
+
+function resolveActiveFolderTarget(folderPath: string, target: string) {
+  const basePath = assertActiveFolderPath(folderPath)
+  const resolvedTarget = resolve(basePath, target || '.')
+  const relPath = relative(basePath, resolvedTarget)
+  if (relPath.startsWith('..') || relPath.includes(':')) {
+    throw new Error('Target path escapes the active FolderMind workspace.')
+  }
+  return resolvedTarget
+}
 
 function getOpenAI() { const key = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY; return key ? new OpenAI({ apiKey: key }) : null }
 function getDefaultRuntimePolicy(archetype: AgentConfig['archetype'] = 'general'): AgentRuntimePolicy {
@@ -245,7 +281,7 @@ function normalizeTaskStatus(status: string | undefined): TaskStatus { return st
 function withTaskIds(items: Array<{ id?: string; text: string; status: TaskStatus; source?: TaskSource; suggestedByJobId?: string; archivedFromJobId?: string; runs?: TaskRun[] }>): TaskItem[] { return items.map((item) => ({ id: item.id || `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, text: item.text, status: normalizeTaskStatus(item.status), source: item.source === 'agent' ? 'agent' : 'user', suggestedByJobId: typeof item.suggestedByJobId === 'string' ? item.suggestedByJobId : undefined, archivedFromJobId: typeof item.archivedFromJobId === 'string' ? item.archivedFromJobId : undefined, runs: item.runs || [] })) }
 function ensureStructuredMemory(folderPath: string, projectName: string): StructuredMemory { const paths = getMemoryPaths(folderPath); if (!existsSync(paths.dir)) mkdirSync(paths.dir, { recursive: true }); const legacyExists = existsSync(paths.legacy); const legacy = legacyExists ? readFileSync(paths.legacy, 'utf-8') : `# ${projectName} — Agent Memory\n\n## What I Know\n\n_Nothing yet. Start a conversation._\n`; if (!existsSync(paths.project)) writeFileSync(paths.project, legacy, 'utf-8'); if (!existsSync(paths.decisions)) writeFileSync(paths.decisions, '# Decisions\n\n_None yet._\n', 'utf-8'); if (!existsSync(paths.preferences)) writeFileSync(paths.preferences, '# Preferences\n\n_None yet._\n', 'utf-8'); if (!existsSync(paths.archivedAgentHistory)) writeFileSync(paths.archivedAgentHistory, '# Archived Agent History\n\n_None yet._\n', 'utf-8'); if (!existsSync(paths.tasks)) writeFileSync(paths.tasks, JSON.stringify({ items: [] }, null, 2), 'utf-8'); if (!existsSync(paths.chat)) writeFileSync(paths.chat, JSON.stringify({ messages: [] }, null, 2), 'utf-8'); const structured = loadStructuredMemory(folderPath); writeLegacyMemorySnapshot(folderPath, structured); return structured }
 function loadStructuredMemory(folderPath: string): StructuredMemory { const paths = getMemoryPaths(folderPath); const rawTasks = existsSync(paths.tasks) ? JSON.parse(readFileSync(paths.tasks, 'utf-8')) : { items: [] }; const memory: StructuredMemory = { project: existsSync(paths.project) ? readFileSync(paths.project, 'utf-8') : '# Project\n\n_None yet._\n', decisions: existsSync(paths.decisions) ? readFileSync(paths.decisions, 'utf-8') : '# Decisions\n\n_None yet._\n', preferences: existsSync(paths.preferences) ? readFileSync(paths.preferences, 'utf-8') : '# Preferences\n\n_None yet._\n', archivedAgentHistory: existsSync(paths.archivedAgentHistory) ? readFileSync(paths.archivedAgentHistory, 'utf-8') : '# Archived Agent History\n\n_None yet._\n', tasks: { items: withTaskIds(Array.isArray(rawTasks.items) ? rawTasks.items : []) } }; writeFileSync(paths.tasks, JSON.stringify(memory.tasks, null, 2), 'utf-8'); return memory }
-function flattenStructuredMemory(memory: StructuredMemory): string { return ['# Project Memory', '', memory.project.trim(), '', '# Decisions', '', memory.decisions.trim(), '', '# Preferences', '', memory.preferences.trim(), '', '# Archived Agent History', '', memory.archivedAgentHistory.trim(), '', '# Tasks', '', memory.tasks.items.length ? memory.tasks.items.map((item) => `- [${item.status === 'done' ? 'x' : item.status === 'suggested' ? '?' : ' '}] ${item.text}`).join('\n') : '_None yet._'].join('\n') }
+function flattenStructuredMemory(memory: FlattenableMemory): string { return ['# Project Memory', '', memory.project.trim(), '', '# Decisions', '', memory.decisions.trim(), '', '# Preferences', '', memory.preferences.trim(), '', '# Archived Agent History', '', (memory.archivedAgentHistory || '# Archived Agent History\n\n_None yet._\n').trim(), '', '# Tasks', '', memory.tasks.items.length ? memory.tasks.items.map((item) => `- [${item.status === 'done' ? 'x' : item.status === 'suggested' ? '?' : ' '}] ${item.text}`).join('\n') : '_None yet._'].join('\n') }
 function writeLegacyMemorySnapshot(folderPath: string, memory: StructuredMemory) { writeFileSync(getMemoryPaths(folderPath).legacy, flattenStructuredMemory(memory), 'utf-8') }
 function persistStructuredMemory(folderPath: string, memory: StructuredMemory) { const paths = getMemoryPaths(folderPath); if (!existsSync(paths.dir)) mkdirSync(paths.dir, { recursive: true }); const normalized = { ...memory, tasks: { items: withTaskIds(memory.tasks.items) } }; writeFileSync(paths.project, normalized.project, 'utf-8'); writeFileSync(paths.decisions, normalized.decisions, 'utf-8'); writeFileSync(paths.preferences, normalized.preferences, 'utf-8'); writeFileSync(paths.archivedAgentHistory, normalized.archivedAgentHistory, 'utf-8'); writeFileSync(paths.tasks, JSON.stringify(normalized.tasks, null, 2), 'utf-8'); writeLegacyMemorySnapshot(folderPath, normalized) }
 function getAgentJobs(folderPath: string) { return listAgentJobs(folderPath) }
@@ -313,11 +349,11 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
     }
     kickAgentRuntime(folderPath, runtimeDeps)
     return { response: finalResponse, tasks: refreshed.tasks.items }
-  } catch (e: any) {
+  } catch (e: unknown) {
     const failed = loadStructuredMemory(folderPath)
     const failedTask = failed.tasks.items.find(t => t.id === taskId)
     if (failedTask) {
-      failedTask.runs = (failedTask.runs || []).map(r => r.id === run.id ? { ...r, status: 'failed', completedAt: Date.now(), durationMs: Date.now() - r.startedAt, summary: e.message } : r)
+      failedTask.runs = (failedTask.runs || []).map(r => r.id === run.id ? { ...r, status: 'failed', completedAt: Date.now(), durationMs: Date.now() - r.startedAt, summary: getErrorMessage(e) } : r)
       persistStructuredMemory(folderPath, failed)
     }
     throw e
@@ -358,31 +394,31 @@ Git:
 ${JSON.stringify(git, null, 2)}
 
 Suggestions:
-${suggestions.join('\\n')}` }] }); summary = res.choices[0].message.content || summary } catch {} } return { summary, fileCount: files.length, topFiles, recentChanges, suggestions, keyDecisions, openTasks, git } }
+${suggestions.join('\\n')}` }] }); summary = res.choices[0].message.content || summary } catch (error: unknown) { console.warn('[FolderMind] Briefing generation fallback:', getErrorMessage(error)) } } return { summary, fileCount: files.length, topFiles, recentChanges, suggestions, keyDecisions, openTasks, git } }
 function watchFolder(folderPath: string): void { activeFolderPath = folderPath; if (activeWatcher) activeWatcher.close(); activeWatcher = chokidar.watch(folderPath, { ignored: /(^|[/\\])\.(foldermind|git)|node_modules|out|dist|release/, persistent: true, ignoreInitial: true }); activeWatcher.on('all', (event, filePath) => { const change = { event, filePath, ts: Date.now() }; pushFolderChange(folderPath, event, filePath); notifyAgentFileChange(folderPath, change, runtimeDeps); mainWindow?.webContents.send('folder:changed', { event, filePath }) }) }
 
 ipcMain.handle('folder:create', async () => { if (!mainWindow) return null; const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'], title: 'Choose or Create a Smart Folder', buttonLabel: 'Make it Smart' }); if (result.canceled || !result.filePaths.length) return null; const folderPath = result.filePaths[0]; const name = folderPath.split(/[\\/]/).pop() || 'Project'; await seedAgent(folderPath, name); watchFolder(folderPath); kickAgentRuntime(folderPath, runtimeDeps); const structured = loadStructuredMemory(folderPath); return { path: folderPath, name, agentConfig: readAgentConfig(folderPath), memory: flattenStructuredMemory(structured) } })
 ipcMain.handle('folder:open', async () => { if (!mainWindow) return null; const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: 'Open Smart Folder' }); if (result.canceled || !result.filePaths.length) return null; const folderPath = result.filePaths[0]; const name = folderPath.split(/[\\/]/).pop() || 'Project'; await seedAgent(folderPath, name); watchFolder(folderPath); kickAgentRuntime(folderPath, runtimeDeps); const structured = loadStructuredMemory(folderPath); return { path: folderPath, name, agentConfig: readAgentConfig(folderPath), memory: flattenStructuredMemory(structured) } })
-ipcMain.handle('folder:activate', async (_event, folderPath: string) => { if (!existsSync(folderPath)) return null; const name = folderPath.split(/[\\/]/).pop() || 'Project'; await seedAgent(folderPath, name); watchFolder(folderPath); kickAgentRuntime(folderPath, runtimeDeps); const structured = loadStructuredMemory(folderPath); return { path: folderPath, name, agentConfig: readAgentConfig(folderPath), memory: flattenStructuredMemory(structured) } })
-ipcMain.handle('folder:getBriefing', async (_event, folderPath: string, folderName: string) => { try { return await generateFolderBriefing(folderPath, folderName) } catch (e: any) { return { summary: `Unable to generate briefing: ${e.message}`, fileCount: 0, topFiles: [], recentChanges: [], suggestions: [], keyDecisions: [], openTasks: [], git: { isRepo: false, branch: null, changedFiles: [], stagedFiles: [], untrackedFiles: [], aheadBehind: null, suggestedCommitMessage: null } } } })
-ipcMain.handle('folder:getGitStatus', async (_event, folderPath: string) => getGitStatus(folderPath))
-ipcMain.handle('folder:getConfig', async (_event, folderPath: string) => readAgentConfig(folderPath))
-ipcMain.handle('agent:listJobs', async (_event, folderPath: string) => getAgentJobs(folderPath))
-ipcMain.handle('agent:listEvents', async (_event, folderPath: string) => getAgentEvents(folderPath))
-ipcMain.handle('agent:runJobs', async (_event, folderPath: string) => { kickAgentRuntime(folderPath, runtimeDeps); return getAgentJobs(folderPath) })
-ipcMain.handle('agent:approveJob', async (_event, folderPath: string, jobId: string) => approveAgentJob(folderPath, jobId, runtimeDeps))
-ipcMain.handle('agent:retryJob', async (_event, folderPath: string, jobId: string) => retryAgentJob(folderPath, jobId, runtimeDeps))
-ipcMain.handle('agent:dismissJob', async (_event, folderPath: string, jobId: string, reason?: string) => dismissAgentJob(folderPath, jobId, reason, runtimeDeps))
-ipcMain.handle('chat:getHistory', async (_event, folderPath: string) => getChatHistory(folderPath))
-ipcMain.handle('chat:clearHistory', async (_event, folderPath: string) => { persistChatHistory(folderPath, []); return true })
-ipcMain.handle('folder:updateConfig', async (_event, folderPath: string, updates: Partial<Pick<AgentConfig, 'tone' | 'archetype' | 'goals' | 'constraints' | 'guardrails'>>) => { const current = readAgentConfig(folderPath); const updated = normalizeAgentConfig({ ...current, ...updates, guardrails: { ...current.guardrails, ...(updates.guardrails || {}), runtime: { ...current.guardrails.runtime, ...(updates.guardrails?.runtime || {}) } } }); writeAgentConfig(folderPath, updated); return updated })
-ipcMain.handle('tasks:list', async (_event, folderPath: string) => getTasks(folderPath))
-ipcMain.handle('tasks:add', async (_event, folderPath: string, text: string, options?: AddTaskOptions) => addTask(folderPath, text, options))
-ipcMain.handle('tasks:update', async (_event, folderPath: string, taskId: string, updates: Partial<Pick<TaskItem, 'text' | 'status'>>) => updateTask(folderPath, taskId, updates))
-ipcMain.handle('tasks:delete', async (_event, folderPath: string, taskId: string) => deleteTask(folderPath, taskId))
-ipcMain.handle('tasks:run', async (event, folderPath: string, taskId: string) => runTaskExecution(folderPath, taskId, event))
+ipcMain.handle('folder:activate', async (_event, folderPath: string) => { if (!existsSync(folderPath)) return null; const safeFolderPath = resolve(folderPath); const name = safeFolderPath.split(/[\\/]/).pop() || 'Project'; await seedAgent(safeFolderPath, name); watchFolder(safeFolderPath); kickAgentRuntime(safeFolderPath, runtimeDeps); const structured = loadStructuredMemory(safeFolderPath); return { path: safeFolderPath, name, agentConfig: readAgentConfig(safeFolderPath), memory: flattenStructuredMemory(structured) } })
+ipcMain.handle('folder:getBriefing', async (_event, folderPath: string, folderName: string) => { try { const safeFolderPath = assertActiveFolderPath(folderPath); return await generateFolderBriefing(safeFolderPath, folderName) } catch (e: unknown) { return { summary: `Unable to generate briefing: ${getErrorMessage(e)}`, fileCount: 0, topFiles: [], recentChanges: [], suggestions: [], keyDecisions: [], openTasks: [], git: { isRepo: false, branch: null, changedFiles: [], stagedFiles: [], untrackedFiles: [], aheadBehind: null, suggestedCommitMessage: null } } } })
+ipcMain.handle('folder:getGitStatus', async (_event, folderPath: string) => getGitStatus(assertActiveFolderPath(folderPath)))
+ipcMain.handle('folder:getConfig', async (_event, folderPath: string) => readAgentConfig(assertActiveFolderPath(folderPath)))
+ipcMain.handle('agent:listJobs', async (_event, folderPath: string) => getAgentJobs(assertActiveFolderPath(folderPath)))
+ipcMain.handle('agent:listEvents', async (_event, folderPath: string) => getAgentEvents(assertActiveFolderPath(folderPath)))
+ipcMain.handle('agent:runJobs', async (_event, folderPath: string) => { const safeFolderPath = assertActiveFolderPath(folderPath); kickAgentRuntime(safeFolderPath, runtimeDeps); return getAgentJobs(safeFolderPath) })
+ipcMain.handle('agent:approveJob', async (_event, folderPath: string, jobId: string) => approveAgentJob(assertActiveFolderPath(folderPath), jobId, runtimeDeps))
+ipcMain.handle('agent:retryJob', async (_event, folderPath: string, jobId: string) => retryAgentJob(assertActiveFolderPath(folderPath), jobId, runtimeDeps))
+ipcMain.handle('agent:dismissJob', async (_event, folderPath: string, jobId: string, reason?: string) => dismissAgentJob(assertActiveFolderPath(folderPath), jobId, reason, runtimeDeps))
+ipcMain.handle('chat:getHistory', async (_event, folderPath: string) => getChatHistory(assertActiveFolderPath(folderPath)))
+ipcMain.handle('chat:clearHistory', async (_event, folderPath: string) => { persistChatHistory(assertActiveFolderPath(folderPath), []); return true })
+ipcMain.handle('folder:updateConfig', async (_event, folderPath: string, updates: Partial<Pick<AgentConfig, 'tone' | 'archetype' | 'goals' | 'constraints' | 'guardrails'>>) => { const safeFolderPath = assertActiveFolderPath(folderPath); const current = readAgentConfig(safeFolderPath); const updated = normalizeAgentConfig({ ...current, ...updates, guardrails: { ...current.guardrails, ...(updates.guardrails || {}), runtime: { ...current.guardrails.runtime, ...(updates.guardrails?.runtime || {}) } } }); writeAgentConfig(safeFolderPath, updated); return updated })
+ipcMain.handle('tasks:list', async (_event, folderPath: string) => getTasks(assertActiveFolderPath(folderPath)))
+ipcMain.handle('tasks:add', async (_event, folderPath: string, text: string, options?: AddTaskOptions) => addTask(assertActiveFolderPath(folderPath), text, options))
+ipcMain.handle('tasks:update', async (_event, folderPath: string, taskId: string, updates: Partial<Pick<TaskItem, 'text' | 'status'>>) => updateTask(assertActiveFolderPath(folderPath), taskId, updates))
+ipcMain.handle('tasks:delete', async (_event, folderPath: string, taskId: string) => deleteTask(assertActiveFolderPath(folderPath), taskId))
+ipcMain.handle('tasks:run', async (event, folderPath: string, taskId: string) => runTaskExecution(assertActiveFolderPath(folderPath), taskId, event))
 
-ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: any[], memory: string) => { if (isRateLimited()) return '⚠️ Rate limit: too many AI calls. Please wait a moment before sending another message.'; try { const finalResponse = await runAgentLoop(message, history, { folderPath, memory, profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory = [...getChatHistory(folderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(folderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(folderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(folderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(folderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(folderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: any) { console.error('Agent chat error:', e); return `⚠️ Error: ${e.message}` } })
+ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>, memory: string) => { if (isRateLimited()) return '⚠️ Rate limit: too many AI calls. Please wait a moment before sending another message.'; try { const safeFolderPath = assertActiveFolderPath(folderPath); const finalResponse = await runAgentLoop(message, history, { folderPath: safeFolderPath, memory, profile: readAgentConfig(safeFolderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory: ChatMessage[] = [...getChatHistory(safeFolderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(safeFolderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(safeFolderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(safeFolderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(safeFolderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(safeFolderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: unknown) { console.error('Agent chat error:', e); return `⚠️ Error: ${getErrorMessage(e)}` } })
 
 ipcMain.handle('agent:approve', (_e, approvalId: string, approved: boolean) => { const resolver = pendingApprovals.get(approvalId); if (resolver) { resolver(approved); pendingApprovals.delete(approvalId); return true } return false })
 ipcMain.handle('agent:setKey', (_e, key: string) => { setApiKey(key); if (activeFolderPath) kickAgentRuntime(activeFolderPath, runtimeDeps); return true })
@@ -397,11 +433,11 @@ ipcMain.handle('voice:transcribe', async (_e, audioBase64: string) => {
     const buffer = Buffer.from(audioBase64, 'base64')
     const blob = new Blob([buffer], { type: 'audio/webm' })
     const file = new File([blob], 'voice.webm', { type: 'audio/webm' })
-    const result = await ai.audio.transcriptions.create({ file, model: 'gpt-4o-mini-transcribe' as any })
-    voiceTranscriptions.set(jobId, { status: 'completed', text: (result as any).text || '' })
+    const result = await ai.audio.transcriptions.create({ file, model: 'gpt-4o-mini-transcribe' as never })
+    voiceTranscriptions.set(jobId, { status: 'completed', text: 'text' in result ? String(result.text || '') : '' })
     return { jobId }
-  } catch (error: any) {
-    voiceTranscriptions.set(jobId, { status: 'failed', error: error?.message || 'Voice transcription failed.' })
+  } catch (error: unknown) {
+    voiceTranscriptions.set(jobId, { status: 'failed', error: getErrorMessage(error) || 'Voice transcription failed.' })
     return { jobId }
   }
 })
@@ -414,30 +450,30 @@ ipcMain.handle('voice:speak', async (_e, text: string) => {
     if (!key) throw new Error('OpenAI API key is not set.')
     const ai = new OpenAI({ apiKey: key })
     const response = await ai.audio.speech.create({
-      model: 'gpt-4o-mini-tts' as any,
-      voice: 'alloy' as any,
+      model: 'gpt-4o-mini-tts' as never,
+      voice: 'alloy' as never,
       input: text,
-      format: 'mp3' as any,
     })
     const arrayBuffer = await response.arrayBuffer()
     const audioBase64 = Buffer.from(arrayBuffer).toString('base64')
     voiceSpeech.set(jobId, { status: 'completed', audioBase64, mimeType: 'audio/mpeg' })
     return { jobId }
-  } catch (error: any) {
-    voiceSpeech.set(jobId, { status: 'failed', error: error?.message || 'Voice synthesis failed.' })
+  } catch (error: unknown) {
+    voiceSpeech.set(jobId, { status: 'failed', error: getErrorMessage(error) || 'Voice synthesis failed.' })
     return { jobId }
   }
 })
 ipcMain.handle('voice:getSpeechResult', async (_e, jobId: string) => voiceSpeech.get(jobId) || { status: 'failed', error: 'Voice speech job not found.' })
-ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string) => shell.openPath(target ? join(folderPath, target) : folderPath))
+ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string) => shell.openPath(resolveActiveFolderTarget(folderPath, target)))
 
 // ── Memory read/write ────────────────────────────────────────────────────────
 ipcMain.handle('memory:read', (_e, folderPath: string) => {
-  const structured = loadStructuredMemory(folderPath)
+  const structured = loadStructuredMemory(assertActiveFolderPath(folderPath))
   return { project: structured.project, decisions: structured.decisions, preferences: structured.preferences, archivedAgentHistory: structured.archivedAgentHistory }
 })
 ipcMain.handle('memory:write', (_e, folderPath: string, updates: { project?: string; decisions?: string; preferences?: string; archivedAgentHistory?: string }) => {
-  const current = loadStructuredMemory(folderPath)
+  const safeFolderPath = assertActiveFolderPath(folderPath)
+  const current = loadStructuredMemory(safeFolderPath)
   const updated: StructuredMemory = {
     ...current,
     project: updates.project ?? current.project,
@@ -445,7 +481,7 @@ ipcMain.handle('memory:write', (_e, folderPath: string, updates: { project?: str
     preferences: updates.preferences ?? current.preferences,
     archivedAgentHistory: updates.archivedAgentHistory ?? current.archivedAgentHistory,
   }
-  persistStructuredMemory(folderPath, updated)
+  persistStructuredMemory(safeFolderPath, updated)
   return true
 })
 
@@ -453,45 +489,45 @@ ipcMain.handle('memory:write', (_e, folderPath: string, updates: { project?: str
 
 ipcMain.handle('git:stageFile', async (_e, folderPath: string, filepath: string) => {
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['add', '--', filepath], { cwd: folderPath })
+    const { stdout, stderr } = await execFileAsync('git', ['add', '--', filepath], { cwd: assertActiveFolderPath(folderPath) })
     return { ok: true, output: (stdout + stderr).trim() }
-  } catch (e: any) { return { ok: false, output: e.message } }
+  } catch (e: unknown) { return { ok: false, output: getErrorMessage(e) } }
 })
 
 ipcMain.handle('git:unstageFile', async (_e, folderPath: string, filepath: string) => {
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['restore', '--staged', '--', filepath], { cwd: folderPath })
+    const { stdout, stderr } = await execFileAsync('git', ['restore', '--staged', '--', filepath], { cwd: assertActiveFolderPath(folderPath) })
     return { ok: true, output: (stdout + stderr).trim() }
-  } catch (e: any) { return { ok: false, output: e.message } }
+  } catch (e: unknown) { return { ok: false, output: getErrorMessage(e) } }
 })
 
 ipcMain.handle('git:stageAll', async (_e, folderPath: string) => {
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['add', '.'], { cwd: folderPath })
+    const { stdout, stderr } = await execFileAsync('git', ['add', '.'], { cwd: assertActiveFolderPath(folderPath) })
     return { ok: true, output: (stdout + stderr).trim() }
-  } catch (e: any) { return { ok: false, output: e.message } }
+  } catch (e: unknown) { return { ok: false, output: getErrorMessage(e) } }
 })
 
 ipcMain.handle('git:commit', async (_e, folderPath: string, message: string) => {
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['commit', '-m', message], { cwd: folderPath })
+    const { stdout, stderr } = await execFileAsync('git', ['commit', '-m', message], { cwd: assertActiveFolderPath(folderPath) })
     return { ok: true, output: (stdout + stderr).trim() }
-  } catch (e: any) { return { ok: false, output: e.message } }
+  } catch (e: unknown) { return { ok: false, output: getErrorMessage(e) } }
 })
 
 ipcMain.handle('git:push', async (_e, folderPath: string) => {
   try {
-    const { stdout, stderr } = await execFileAsync('git', ['push'], { cwd: folderPath, timeout: 30000 })
+    const { stdout, stderr } = await execFileAsync('git', ['push'], { cwd: assertActiveFolderPath(folderPath), timeout: 30000 })
     return { ok: true, output: (stdout + stderr).trim() }
-  } catch (e: any) { return { ok: false, output: e.message } }
+  } catch (e: unknown) { return { ok: false, output: getErrorMessage(e) } }
 })
 
 ipcMain.handle('git:getFileDiff', async (_e, folderPath: string, filepath: string, staged: boolean) => {
   try {
     const args = staged ? ['diff', '--cached', '--', filepath] : ['diff', '--', filepath]
-    const { stdout } = await execFileAsync('git', args, { cwd: folderPath })
+    const { stdout } = await execFileAsync('git', args, { cwd: assertActiveFolderPath(folderPath) })
     return { ok: true, diff: stdout || '(no diff output)' }
-  } catch (e: any) { return { ok: false, diff: '' } }
+  } catch (_e: unknown) { return { ok: false, diff: '' } }
 })
 
 const ALLOWED_PERMISSIONS = new Set(['media', 'audioCapture', 'microphone'])

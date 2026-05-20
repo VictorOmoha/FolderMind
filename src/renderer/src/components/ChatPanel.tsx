@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import type { AgentJob, TaskItem, ChatMessage } from '../../../src/vite-env'
+import { useState, useRef, useEffect } from 'react'
+import type { AgentJob, TaskItem, ChatMessage } from '../../../vite-env'
 import type { Message } from './chatPanelTypes'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatMessageList } from './ChatMessageList'
@@ -9,6 +9,10 @@ import { VoicePanel } from './VoicePanel'
 import { useVoice } from '../hooks/useVoice'
 import { useChatIPC } from '../hooks/useChatIPC'
 import styles from './ChatPanel.module.css'
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Error while sending message.'
+}
 
 interface Props {
   folderPath: string
@@ -61,10 +65,8 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
     voiceSpeaking,
     voiceError,
     lastTranscript,
-    setVoiceError,
     toggleVoice,
     speakText,
-    stopVoiceLoop
   } = useVoice({
     voiceAutoMode,
     voiceRepliesEnabled,
@@ -173,7 +175,11 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
 
     const history = messages
       .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-      .map((msg) => ({ role: msg.role === 'tool' ? 'assistant' : (msg.role as 'user' | 'assistant'), content: msg.content }))
+      .map((msg, index) => ({
+        role: msg.role === 'tool' ? 'assistant' : (msg.role as 'user' | 'assistant'),
+        content: msg.content,
+        ts: Date.now() - (messages.length - index),
+      }))
 
     setMessages(prev => [...prev, { role: 'user', content: prompt }])
     setInput('')
@@ -189,8 +195,8 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
         onAfterAICall?.()
         speakText(response)
       }
-    } catch (error: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${error?.message || 'Error while sending message.'}` }])
+    } catch (error: unknown) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${getErrorMessage(error)}` }])
     } finally {
       setLoading(false)
       setStreamingContent('')
@@ -265,17 +271,25 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
           onToggleAutoMode={() => setVoiceAutoMode(prev => !prev)}
         />
 
-        <section className={styles.card}>
-          <h3>Plan</h3>
-          {!plan ? <p className="muted">No active plan yet.</p> : <><p className={styles.planGoal}>{plan.goal}</p><div className={styles.planSteps}>{plan.steps.map(step => <div key={step.id} className={`${styles.planStep} ${styles[step.status] || ''}`}><span className={styles.planDot} /><span>{step.text}</span></div>)}</div></>}
-        </section>
+        {plan && (
+          <section className={styles.card}>
+            <h3>Plan</h3>
+            <p className={styles.planGoal}>{plan.goal}</p>
+            <div className={styles.planSteps}>{plan.steps.map(step => <div key={step.id} className={`${styles.planStep} ${styles[step.status] || ''}`}><span className={styles.planDot} /><span>{step.text}</span></div>)}</div>
+          </section>
+        )}
 
-        <section className={styles.card}>
-          <h3>Activity</h3>
-          {activity.length === 0 ? <p className="muted">No activity yet.</p> : <div className={styles.activityList}>{activity.slice().reverse().map((entry, idx) => <div key={`${entry.ts}-${idx}`} className={styles.activityItem}><span className={`${styles.activityKind} ${styles[entry.kind] || ''}`}>{entry.kind}</span><span className={styles.activityMessage}>{entry.message}</span></div>)}</div>}
-        </section>
+        {activity.length > 0 && (
+          <section className={styles.card}>
+            <h3>Activity</h3>
+            <div className={styles.activityList}>{activity.slice().reverse().map((entry, idx) => <div key={`${entry.ts}-${idx}`} className={styles.activityItem}><span className={`${styles.activityKind} ${styles[entry.kind] || ''}`}>{entry.kind}</span><span className={styles.activityMessage}>{entry.message}</span></div>)}</div>
+          </section>
+        )}
 
-        <section className={styles.card}><h3>Memory</h3><pre className={styles.memoryPreview}>{memory}</pre></section>
+        <details className={styles.card}>
+          <summary className={styles.memorySummary}>Memory</summary>
+          <pre className={styles.memoryPreview}>{memory}</pre>
+        </details>
 
         {approvalRequest && <ApprovalCard approvalRequest={approvalRequest} onBlock={() => void handleApproval(false)} onApprove={() => void handleApproval(true)} />}
       </aside>

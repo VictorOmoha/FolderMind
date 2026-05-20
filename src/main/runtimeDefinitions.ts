@@ -66,7 +66,10 @@ export function getWorkflowDefinition(kind: AgentJobKind): AgentWorkflowDefiniti
 }
 
 export function getWorkflowSteps(kind: AgentJobKind): AgentJobPlanStep[] {
-  return getWorkflowDefinition(kind).steps.map((step) => ({ ...step }))
+  return getWorkflowDefinition(kind).steps.map((step): AgentJobPlanStep => ({
+    ...step,
+    status: step.status,
+  }))
 }
 
 export function getWorkflowFollowUps(job: AgentJob): AgentFollowUpKind[] {

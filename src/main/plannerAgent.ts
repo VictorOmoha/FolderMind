@@ -2,12 +2,64 @@ import { OpenAI } from 'openai'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { getOpenAI } from './agent'
+import { packWorkspaceContext } from './contextPacker'
+import { semanticSearch } from './ragSearch'
+
+interface AgentMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+interface ToolCallTraceEntry {
+  tool: string
+  detail: string
+  ts: number
+  file?: string
+  command?: string
+  diff?: string
+}
+
+interface AgentProfile {
+  name?: string
+  archetype?: string
+}
+
+interface PlannerContext {
+  folderPath: string
+  profile?: AgentProfile
+  onToken: (token: string) => void
+  onToolCall: (name: string, args: unknown) => void
+  onToolResult: (name: string, result: string) => void
+  onActivity?: (entry: { kind: 'thought' | 'tool' | 'result' | 'approval' | 'system'; message: string; ts: number }) => void
+  onTrace?: (entry: ToolCallTraceEntry) => void
+}
+
+interface PlannerHelpers {
+  truncate: (text: string, limit: number) => string
+  safeJoin: (folderPath: string, target: string) => string
+  searchInTree: (folderPath: string, query: string, subpath?: string) => string
+  IGNORED_DIRS: Set<string>
+  READ_LIMIT: number
+}
+
+interface AccumulatedToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
 
 export async function runPlannerAgent(
   userMessage: string,
-  history: any[],
-  context: any,
-  helpers: any
+  history: AgentMessage[],
+  context: PlannerContext,
+  helpers: PlannerHelpers
 ): Promise<{ finalResponse: string, toolCallsCount: number }> {
   const ai = getOpenAI()
   const { folderPath, profile, onToken, onToolCall, onToolResult, onActivity, onTrace } = context
@@ -56,7 +108,6 @@ export async function runPlannerAgent(
     }
   ]
 
-  const { packWorkspaceContext } = require('./contextPacker')
   const packedContext = packWorkspaceContext(folderPath)
 
   const profileSection = profile ? `\nAgent Profile:\n- Name: ${profile.name || 'FolderMind Planner'}\n- Archetype: ${profile.archetype || 'general'}` : ''
@@ -72,7 +123,7 @@ Below is the pre-packed text content of the workspace files. Use this to avoid n
 ${packedContext}
 ------------------------------------`
 
-  const messages: any[] = [
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: userMessage }
@@ -86,14 +137,14 @@ ${packedContext}
     depth++
     const stream = await ai.chat.completions.create({ model: 'gpt-4o', messages, tools, tool_choice: 'auto', stream: true, temperature: 0.2 })
     let currentResponse = ''
-    const toolCalls: any[] = []
+    const toolCalls: AccumulatedToolCall[] = []
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta
       if (delta?.content) { currentResponse += delta.content; onToken(delta.content) }
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
-          if (!toolCalls[tc.index]) toolCalls[tc.index] = { id: tc.id, type: tc.type, function: { name: tc.function?.name || '', arguments: '' } }
+          if (!toolCalls[tc.index]) toolCalls[tc.index] = { id: tc.id ?? `toolcall-${tc.index}`, type: 'function', function: { name: tc.function?.name || '', arguments: '' } }
           if (tc.function?.arguments) toolCalls[tc.index].function.arguments += tc.function.arguments
         }
       }
@@ -107,7 +158,8 @@ ${packedContext}
       for (const call of toolCalls) {
         totalToolCalls++
         const name = call.function.name
-        let args: any; try { args = JSON.parse(call.function.arguments) } catch { args = {} }
+        let args: Record<string, unknown>
+        try { args = JSON.parse(call.function.arguments) as Record<string, unknown> } catch { args = {} }
         onToolCall(name, args)
         onActivity?.({ kind: 'tool', message: `Planner running ${name}`, ts: Date.now() })
         
@@ -115,17 +167,18 @@ ${packedContext}
         try {
           if (name === 'listDirectory') {
             onTrace?.({ tool: name, detail: `Listed directory ${String(args.subpath || '.')}`, ts: Date.now() })
-            const targetPath = safeJoin(folderPath, args.subpath === '.' ? '' : args.subpath)
+            const subpath = String(args.subpath ?? '.')
+            const targetPath = safeJoin(folderPath, subpath === '.' ? '' : subpath)
             const items = readdirSync(targetPath)
             result = items.filter(i => !IGNORED_DIRS.has(i)).map(i => {
               try { return statSync(join(targetPath, i)).isDirectory() ? `[DIR] ${i}` : `[FILE] ${i}` } catch { return `[UNKNOWN] ${i}` }
             }).join('\n') || 'Empty directory.'
           } else if (name === 'readFile') {
              onTrace?.({ tool: name, detail: `Read file ${String(args.filepath)}`, ts: Date.now(), file: String(args.filepath) })
-             result = truncate(readFileSync(safeJoin(folderPath, args.filepath), 'utf-8'), READ_LIMIT)
+             result = truncate(readFileSync(safeJoin(folderPath, String(args.filepath ?? '')), 'utf-8'), READ_LIMIT)
           } else if (name === 'readFileRange') {
              onTrace?.({ tool: name, detail: `Read file range ${String(args.filepath)}:${args.startLine}-${args.endLine}`, ts: Date.now(), file: String(args.filepath) })
-             const lines = readFileSync(safeJoin(folderPath, args.filepath), 'utf-8').split(/\r?\n/)
+             const lines = readFileSync(safeJoin(folderPath, String(args.filepath ?? '')), 'utf-8').split(/\r?\n/)
              const start = Math.max(1, Number(args.startLine || 1))
              const end = Math.max(start, Number(args.endLine || start))
              result = lines.slice(start - 1, end).map((line, index) => `${start + index}: ${line}`).join('\n') || 'No content in requesting range.'
@@ -133,11 +186,10 @@ ${packedContext}
              onTrace?.({ tool: name, detail: `Searched for "${String(args.query || '')}"`, ts: Date.now() })
              result = searchInTree(folderPath, String(args.query || ''), String(args.subpath || '.'))
           } else if (name === 'semanticSearch') {
-             const { semanticSearch } = require('./ragSearch')
              onTrace?.({ tool: name, detail: `Semantic search for "${String(args.query || '')}"`, ts: Date.now() })
              result = await semanticSearch(folderPath, String(args.query || ''), Number(args.topK || 5))
           }
-        } catch (err: any) { result = `Error: ${err.message}` }
+        } catch (err: unknown) { result = `Error: ${getErrorMessage(err)}` }
         
         onToolResult(name, result)
         onActivity?.({ kind: 'result', message: `${name}: ${result.slice(0, 200)}`, ts: Date.now() })

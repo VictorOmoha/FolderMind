@@ -6,9 +6,13 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev -- --no-sandbox",
-    "build": "electron-vite build && electron-builder",
+    "typecheck": "tsc --noEmit",
+    "build:app": "electron-vite build",
+    "build": "npm run build:app && electron-builder",
     "preview": "electron-vite preview",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "functions:build": "npm --prefix functions run build",
+    "verify": "npm run typecheck && npm run lint && npm run functions:build"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

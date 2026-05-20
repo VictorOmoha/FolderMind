@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import type { User } from 'firebase/auth'
 import type { SmartFolder } from './useFolder'
-import type { TaskItem, ChatMessage } from '../../../../src/vite-env'
+import type { TaskItem, ChatMessage } from '../../../vite-env'
 import {
   syncFolder,
   syncMemory,

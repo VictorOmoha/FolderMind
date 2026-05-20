@@ -73,6 +73,29 @@ npm install
 npm run dev
 ```
 
+On Windows, if `npm` resolves to a broken user-level prefix, set the prefix for the current PowerShell session before running npm commands:
+
+```powershell
+$env:NPM_CONFIG_PREFIX='C:\Program Files\nodejs'
+```
+
+Install Firebase Functions dependencies separately when working on billing or backend functions:
+
+```bash
+cd functions
+npm install
+npm run build
+```
+
+## Verification
+
+```bash
+npm run verify
+npm run build
+```
+
+`npm run verify` runs TypeScript checks, renderer/main lint, and the Firebase Functions build. `npm run build` packages the Electron app.
+
 ## Environment
 
 Minimum local env:

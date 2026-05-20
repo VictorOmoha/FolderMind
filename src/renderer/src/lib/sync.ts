@@ -9,7 +9,7 @@ import {
 import { db } from './firebase'
 import type { User } from 'firebase/auth'
 import type { SmartFolder } from '../hooks/useFolder'
-import type { TaskItem, ChatMessage } from '../../../../src/vite-env'
+import type { TaskItem, ChatMessage } from '../../../vite-env'
 
 // ── Deterministic, Firestore-safe folder ID from local path ──────────────────
 export function folderIdFromPath(path: string): string {
@@ -43,7 +43,7 @@ function simplifyTasks(tasks: TaskItem[]): CloudTask[] {
   return tasks.slice(0, 100).map((t) => ({
     id: t.id,
     text: t.text,
-    status: t.status,
+    status: t.status === 'done' ? 'done' : 'open',
     runCount: t.runs?.length ?? 0,
     lastRunSummary: t.runs?.[0]?.summary?.slice(0, 300),
     lastRunStatus: t.runs?.[0]?.status,
@@ -128,13 +128,17 @@ export interface CloudFolder {
   updatedAt: number | null
 }
 
+interface TimestampLike {
+  toMillis?: () => number
+}
+
 export async function loadUserFolders(user: User): Promise<CloudFolder[]> {
   const col = collection(db, 'users', user.uid, 'folders')
   const snap = await getDocs(col)
   return snap.docs
     .map((d) => {
       const data = d.data() as Omit<CloudFolder, 'id'>
-      const ts = data.updatedAt as any
+      const ts = data.updatedAt as TimestampLike | undefined
       return {
         id: d.id,
         name: data.name ?? 'Unnamed',

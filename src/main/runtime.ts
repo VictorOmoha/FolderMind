@@ -1,7 +1,5 @@
-import { exec } from 'child_process'
 import { existsSync } from 'fs'
 import { basename, join, relative } from 'path'
-import { promisify } from 'util'
 import { hasApiKey } from './agent'
 import { executeJob, queueConfiguredFollowUps } from './runtimeEngine'
 import { detectTestCommand, findCommandRule, getRuntimePolicy } from './runtimePolicy'
@@ -18,6 +16,7 @@ import {
 import {
   AgentJob,
   AgentJobKind,
+  AgentRuntimeEvent,
   AgentJobTrigger,
   FolderChangeEvent,
   REVIEW_DEBOUNCE_MS,
@@ -27,6 +26,7 @@ import {
 import {
   appendRuntimeEvent,
   ensureState,
+  readEvents,
   readJobs,
   saveAndEmit,
 } from './runtimeState'
@@ -36,7 +36,6 @@ export type {
   AgentRuntimeEvent,
 } from './runtimeTypes'
 
-const execAsync = promisify(exec)
 const pendingReviewTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingReviewChanges = new Map<string, FolderChangeEvent[]>()
 const processingFolders = new Set<string>()
@@ -641,8 +640,6 @@ export function kickAgentRuntime(folderPath: string, deps: RuntimeDeps) {
     void runNextJob(folderPath, deps)
   })
 }
-
-
 
 
 

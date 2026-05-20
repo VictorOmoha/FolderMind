@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import type { GitStatus } from '../../../src/vite-env'
+import { DiffViewer } from './DiffViewer'
 import styles from './GitPanel.module.css'
 
 interface Props {
@@ -13,6 +14,43 @@ export function GitPanel({ folderPath, gitStatus, onRefresh }: Props) {
   const [commitMessage, setCommitMessage] = useState(gitStatus.suggestedCommitMessage || '')
   const [loading, setLoading] = useState(false)
   const [opResult, setOpResult] = useState<{ ok: boolean; output: string } | null>(null)
+  const [expandedDiffs, setExpandedDiffs] = useState<Record<string, { diff: string; loading: boolean }>>({})
+
+  const handleToggleDiff = async (filepath: string, staged: boolean) => {
+    if (expandedDiffs[filepath]) {
+      setExpandedDiffs(prev => {
+        const next = { ...prev }
+        delete next[filepath]
+        return next
+      })
+      return
+    }
+
+    setExpandedDiffs(prev => ({
+      ...prev,
+      [filepath]: { diff: '', loading: true }
+    }))
+
+    try {
+      const res = await window.foldermind.gitGetFileDiff(folderPath, filepath, staged)
+      if (res.ok) {
+        setExpandedDiffs(prev => ({
+          ...prev,
+          [filepath]: { diff: res.diff, loading: false }
+        }))
+      } else {
+        setExpandedDiffs(prev => ({
+          ...prev,
+          [filepath]: { diff: 'Error fetching diff.', loading: false }
+        }))
+      }
+    } catch (e) {
+      setExpandedDiffs(prev => ({
+        ...prev,
+        [filepath]: { diff: 'Failed to fetch diff.', loading: false }
+      }))
+    }
+  }
 
   const handleStageFile = async (filepath: string) => {
     setLoading(true)
@@ -83,16 +121,35 @@ export function GitPanel({ folderPath, gitStatus, onRefresh }: Props) {
               <div className={styles.sectionHeader}>
                 <span className={styles.sectionLabel}>Staged Changes</span>
               </div>
-              {gitStatus.stagedFiles.map(f => (
-                <div key={f} className={styles.fileRow}>
-                  <div className={styles.fileMain}>
-                    <span className={styles.fileName}>{f}</span>
-                    <div className={styles.fileActions}>
-                      <button className={`${styles.fileBtn} ${styles.unstage}`} onClick={() => handleUnstageFile(f)} disabled={loading}>Unstage</button>
+              {gitStatus.stagedFiles.map(f => {
+                const diffState = expandedDiffs[f]
+                return (
+                  <div key={f} className={styles.fileRow}>
+                    <div className={styles.fileMain}>
+                      <span className={styles.fileName}>{f}</span>
+                      <div className={styles.fileActions}>
+                        <button
+                          className={`${styles.fileBtn} ${styles.diff}`}
+                          onClick={() => handleToggleDiff(f, true)}
+                          disabled={loading}
+                        >
+                          {diffState ? 'Hide Diff' : 'Diff'}
+                        </button>
+                        <button className={`${styles.fileBtn} ${styles.unstage}`} onClick={() => handleUnstageFile(f)} disabled={loading}>Unstage</button>
+                      </div>
                     </div>
+                    {diffState && (
+                      <div className={styles.diffWrapper}>
+                        {diffState.loading ? (
+                          <div className={styles.diffLoading}>Loading diff...</div>
+                        ) : (
+                          <DiffViewer filepath={f} diff={diffState.diff} defaultOpen={true} />
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -102,16 +159,35 @@ export function GitPanel({ folderPath, gitStatus, onRefresh }: Props) {
                 <span className={styles.sectionLabel}>Changes</span>
                 <button className={styles.actionBtn} onClick={handleStageAll} disabled={loading}>Stage All</button>
               </div>
-              {gitStatus.changedFiles.map(f => (
-                <div key={f} className={styles.fileRow}>
-                  <div className={styles.fileMain}>
-                    <span className={styles.fileName}>{f}</span>
-                    <div className={styles.fileActions}>
-                      <button className={`${styles.fileBtn} ${styles.stage}`} onClick={() => handleStageFile(f)} disabled={loading}>Stage</button>
+              {gitStatus.changedFiles.map(f => {
+                const diffState = expandedDiffs[f]
+                return (
+                  <div key={f} className={styles.fileRow}>
+                    <div className={styles.fileMain}>
+                      <span className={styles.fileName}>{f}</span>
+                      <div className={styles.fileActions}>
+                        <button
+                          className={`${styles.fileBtn} ${styles.diff}`}
+                          onClick={() => handleToggleDiff(f, false)}
+                          disabled={loading}
+                        >
+                          {diffState ? 'Hide Diff' : 'Diff'}
+                        </button>
+                        <button className={`${styles.fileBtn} ${styles.stage}`} onClick={() => handleStageFile(f)} disabled={loading}>Stage</button>
+                      </div>
                     </div>
+                    {diffState && (
+                      <div className={styles.diffWrapper}>
+                        {diffState.loading ? (
+                          <div className={styles.diffLoading}>Loading diff...</div>
+                        ) : (
+                          <DiffViewer filepath={f} diff={diffState.diff} defaultOpen={true} />
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

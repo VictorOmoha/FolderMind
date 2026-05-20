@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { AgentConfig } from '../../../../src/vite-env'
+import type { AgentConfig } from '../../../vite-env'
 import styles from './SettingsModal.module.css'
 
 interface Props {
@@ -17,6 +17,14 @@ interface Props {
     guardrails: AgentConfig['guardrails']
   }) => void
 }
+
+const ARCHETYPE_OPTIONS: Array<{ value: AgentConfig['archetype']; label: string }> = [
+  { value: 'general', label: 'General Assistant' },
+  { value: 'codebase', label: 'Codebase Expert' },
+  { value: 'research', label: 'Research Agent' },
+  { value: 'content', label: 'Content Creator' },
+  { value: 'operations', label: 'Operations Manager' },
+]
 
 export function SettingsModal({ open, folderName, folderPath, agentConfig, onClose, onSaveApiKey, onSaveProfile }: Props) {
   const [apiKey, setApiKey] = useState('')
@@ -93,12 +101,10 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
                 </div>
                 <div style={{ flex: 1 }}>
                   <span className={styles.k}>Archetype</span>
-                  <select className={styles.input} value={archetype} onChange={e => setArchetype(e.target.value as any)}>
-                    <option value="general">General Assistant</option>
-                    <option value="codebase">Codebase Expert</option>
-                    <option value="research">Research Agent</option>
-                    <option value="content">Content Creator</option>
-                    <option value="operations">Operations Manager</option>
+                  <select className={styles.input} value={archetype} onChange={e => setArchetype(e.target.value as AgentConfig['archetype'])}>
+                    {ARCHETYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -60,6 +60,7 @@ export default function App() {
   const [upgradeReason, setUpgradeReason] = useState<'folders' | 'ai_calls' | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'overview' | 'chat' | 'inbox' | 'git'>('overview')
 
   const headerButtonStyle = {
     background: 'transparent', border: '1px solid #444', color: '#fff',
@@ -194,6 +195,13 @@ export default function App() {
   const syncLabel = sync.status === 'syncing' ? '⟳ Syncing' : sync.status === 'synced' ? '☁ Synced' : sync.status === 'error' ? '⚠ Sync error' : ''
   const syncClass = `${styles.syncIndicator} ${styles[sync.status] || ''}`
 
+  // Dynamic badge counts
+  const openTasksCount = tasks.filter((t) => t.status === 'open').length
+  const pendingJobsCount = jobs.filter((j) => j.status === 'pending' || j.status === 'running').length
+  const gitChangesCount = gitStatus?.isRepo
+    ? (gitStatus.changedFiles?.length || 0) + (gitStatus.stagedFiles?.length || 0)
+    : 0
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className={styles.app}>
@@ -232,7 +240,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div className={styles.workspace}>
+          <div className={`${styles.workspace} ${activeTab === 'chat' || activeTab === 'inbox' ? styles.noScroll : ''}`}>
             <div className={styles.workspaceHeader}>
               <div>
                 <h2>{activeFolder.name}</h2>
@@ -253,110 +261,156 @@ export default function App() {
               </div>
             </div>
 
-            {/* ── Usage bar ── */}
-            <div className={styles.usageBar}>
-              <div className={styles.usageBarLeft}>
-                <span className={`${styles.usagePlanPill} ${styles[usage.planTier] || ''}`}>{usage.planTier}</span>
-                <span className={`${styles.usageCallsLabel} ${!canSendAI ? styles.exhausted : ''}`}>
-                  {aiCallsLabel}
-                  {isFreeTier && (
-                    <span className={styles.usageCallsTrack}>
-                      <span
-                        className={styles.usageCallsFill}
-                        style={{ width: `${Math.min(100, ((50 - aiCallsRemaining) / 50) * 100)}%` }}
-                      />
-                    </span>
-                  )}
-                </span>
-                {isFreeTier && (
-                  <button className={styles.usageUpgradeBtn} onClick={() => setUpgradeReason('ai_calls')}>
-                    Upgrade →
-                  </button>
-                )}
-              </div>
-              <div className={styles.usageBarRight}>
-                {syncLabel && <span className={syncClass}>{syncLabel}</span>}
-                <span className={styles.usageUserEmail}>{user?.email}</span>
-                <button className={styles.usageSignoutBtn} onClick={logout}>Sign out</button>
-              </div>
+            {/* ── Tabs Navigation Bar ── */}
+            <div className={styles.tabsHeader}>
+              <button
+                className={`${styles.tabButton} ${activeTab === 'overview' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('overview')}
+              >
+                📁 Overview
+              </button>
+              <button
+                className={`${styles.tabButton} ${activeTab === 'chat' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('chat')}
+              >
+                💬 Chat & Tasks
+                {openTasksCount > 0 && <span className={`${styles.tabBadge} ${styles.badgeInfo}`}>{openTasksCount}</span>}
+              </button>
+              <button
+                className={`${styles.tabButton} ${activeTab === 'inbox' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('inbox')}
+              >
+                📥 Inbox & Jobs
+                {pendingJobsCount > 0 && <span className={`${styles.tabBadge} ${styles.badgeWarning}`}>{pendingJobsCount}</span>}
+              </button>
+              <button
+                className={`${styles.tabButton} ${activeTab === 'git' ? styles.activeTab : ''}`}
+                onClick={() => setActiveTab('git')}
+              >
+                🌿 Git Control
+                {gitChangesCount > 0 && <span className={`${styles.tabBadge} ${styles.badgeError}`}>{gitChangesCount}</span>}
+              </button>
             </div>
 
             {workspaceNotice && <div className={styles.workspaceNotice}>{workspaceNotice}</div>}
 
-            <div className={styles.briefingStrip}>
-              <div className={styles.briefingMain}>
-                <strong>Folder Brief</strong>
-                <p>{briefingLoading ? 'Generating folder briefing...' : briefingError ? briefingError : briefing?.summary || 'No briefing yet.'}</p>
-              </div>
-              <div className={styles.briefingSide}>
-                <div><span className={styles.briefingLabel}>Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-              </div>
-            </div>
+            <div className={`${styles.tabContent} ${activeTab === 'chat' || activeTab === 'inbox' ? styles.noScroll : ''}`}>
+              {activeTab === 'overview' && (
+                <div className={styles.overviewContainer}>
+                  {/* Briefing Strip */}
+                  <div className={styles.briefingStrip}>
+                    <div className={styles.briefingMain}>
+                      <strong>Folder Brief</strong>
+                      <p>{briefingLoading ? 'Generating folder briefing...' : briefingError ? briefingError : briefing?.summary || 'No briefing yet.'}</p>
+                    </div>
+                    <div className={styles.briefingSide}>
+                      <div><span className={styles.briefingLabel}>Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                    </div>
+                  </div>
 
-            <AgentInbox
-              tasks={tasks}
-              jobs={jobs}
-              events={events}
-              selectedJobId={selectedJobId}
-              onSelectJob={setSelectedJobId}
-              onRunNow={async () => {
-                if (!activeFolder) return
-                await window.foldermind.runAgentJobs(activeFolder.path)
-                refreshJobs?.()
-              }}
-              onApproveJob={async (jobId) => {
-                if (!activeFolder) return
-                await window.foldermind.approveAgentJob(activeFolder.path, jobId)
-                refreshJobs?.()
-                refreshTasks?.()
-              }}
-              onRetryJob={async (jobId) => {
-                if (!activeFolder) return
-                await window.foldermind.retryAgentJob(activeFolder.path, jobId)
-                refreshJobs?.()
-              }}
-              onDismissJob={async (jobId, reason) => {
-                if (!activeFolder) return
-                await window.foldermind.dismissAgentJob(activeFolder.path, jobId, reason)
-                refreshJobs?.()
-              }}
-              onCreateTask={async (text) => {
-                await addTask(text)
-                refreshTasks?.()
-              }}
-              onOpenTask={(taskId) => setSelectedTaskId(taskId)}
-            />
+                  {/* Plan / Account Usage persistent details at bottom of Overview */}
+                  <div className={styles.usageBar}>
+                    <div className={styles.usageBarLeft}>
+                      <span className={`${styles.usagePlanPill} ${styles[usage.planTier] || ''}`}>{usage.planTier}</span>
+                      <span className={`${styles.usageCallsLabel} ${!canSendAI ? styles.exhausted : ''}`}>
+                        {aiCallsLabel}
+                        {isFreeTier && (
+                          <span className={styles.usageCallsTrack}>
+                            <span
+                              className={styles.usageCallsFill}
+                              style={{ width: `${Math.min(100, ((50 - aiCallsRemaining) / 50) * 100)}%` }}
+                            />
+                          </span>
+                        )}
+                      </span>
+                      {isFreeTier && (
+                        <button className={styles.usageUpgradeBtn} onClick={() => setUpgradeReason('ai_calls')}>
+                          Upgrade →
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.usageBarRight}>
+                      {syncLabel && <span className={syncClass}>{syncLabel}</span>}
+                      <span className={styles.usageUserEmail}>{user?.email}</span>
+                      <button className={styles.usageSignoutBtn} onClick={logout}>Sign out</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-            {gitStatus?.isRepo
-              ? <GitPanel
+              {activeTab === 'chat' && (
+                <ChatPanel
+                  folderName={activeFolder.name}
                   folderPath={activeFolder.path}
-                  gitStatus={gitStatus}
-                  onRefresh={() => refreshBriefing?.()}
+                  memory={activeFolder.memory}
+                  tasks={tasks}
+                  jobs={jobs}
+                  selectedTaskId={selectedTaskId}
+                  hasApiKey={hasApiKey}
+                  canSendAI={canSendAI}
+                  onRunTask={handleRunTask}
+                  onAddTask={addTask}
+                  onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
+                  onDeleteTask={deleteTask}
+                  onSelectTask={setSelectedTaskId}
+                  onSelectJob={setSelectedJobId}
+                  onAfterAICall={handleAfterAICall}
+                  onUsageLimitHit={() => setUpgradeReason('ai_calls')}
                 />
-              : <div className={`${styles.gitStrip} ${styles.gitStripEmpty}`}><div className={`${styles.gitCard} ${styles.wide}`}><span className={styles.briefingLabel}>Git Status</span><p>This folder is not a git repository.</p></div><div className={styles.gitCard}><span className={styles.briefingLabel}>Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
-            }
+              )}
 
-            <ChatPanel
-              folderName={activeFolder.name}
-              folderPath={activeFolder.path}
-              memory={activeFolder.memory}
-              tasks={tasks}
-              jobs={jobs}
-              selectedTaskId={selectedTaskId}
-              hasApiKey={hasApiKey}
-              canSendAI={canSendAI}
-              onRunTask={handleRunTask}
-              onAddTask={addTask}
-              onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
-              onDeleteTask={deleteTask}
-              onSelectTask={setSelectedTaskId}
-              onSelectJob={setSelectedJobId}
-              onAfterAICall={handleAfterAICall}
-              onUsageLimitHit={() => setUpgradeReason('ai_calls')}
-            />
+              {activeTab === 'inbox' && (
+                <AgentInbox
+                  tasks={tasks}
+                  jobs={jobs}
+                  events={events}
+                  selectedJobId={selectedJobId}
+                  onSelectJob={setSelectedJobId}
+                  onRunNow={async () => {
+                    if (!activeFolder) return
+                    await window.foldermind.runAgentJobs(activeFolder.path)
+                    refreshJobs?.()
+                  }}
+                  onApproveJob={async (jobId) => {
+                    if (!activeFolder) return
+                    await window.foldermind.approveAgentJob(activeFolder.path, jobId)
+                    refreshJobs?.()
+                    refreshTasks?.()
+                  }}
+                  onRetryJob={async (jobId) => {
+                    if (!activeFolder) return
+                    await window.foldermind.retryAgentJob(activeFolder.path, jobId)
+                    refreshJobs?.()
+                  }}
+                  onDismissJob={async (jobId, reason) => {
+                    if (!activeFolder) return
+                    await window.foldermind.dismissAgentJob(activeFolder.path, jobId, reason)
+                    refreshJobs?.()
+                  }}
+                  onCreateTask={async (text) => {
+                    await addTask(text)
+                    refreshTasks?.()
+                  }}
+                  onOpenTask={(taskId) => {
+                    setSelectedTaskId(taskId)
+                    setActiveTab('chat')
+                  }}
+                />
+              )}
+
+              {activeTab === 'git' && (
+                gitStatus?.isRepo
+                  ? <GitPanel
+                      folderPath={activeFolder.path}
+                      gitStatus={gitStatus}
+                      onRefresh={() => refreshBriefing?.()}
+                    />
+                  : <div className={`${styles.gitStrip} ${styles.gitStripEmpty}`}><div className={`${styles.gitCard} ${styles.wide}`}><span className={styles.briefingLabel}>Git Status</span><p>This folder is not a git repository.</p></div><div className={styles.gitCard}><span className={styles.briefingLabel}>Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
+              )}
+            </div>
           </div>
         )}
       </main>

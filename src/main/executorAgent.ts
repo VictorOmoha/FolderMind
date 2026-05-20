@@ -2,14 +2,64 @@ import { OpenAI } from 'openai'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { getOpenAI } from './agent'
+import { runBrowserSession } from './browserTools'
 
 const execAsync = promisify(exec)
 
+interface AgentMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+interface ToolCallTraceEntry {
+  tool: string
+  detail: string
+  ts: number
+  file?: string
+  command?: string
+  diff?: string
+}
+
+interface ExecutorContext {
+  folderPath: string
+  onToken: (token: string) => void
+  onToolCall: (name: string, args: unknown) => void
+  onToolResult: (name: string, result: string) => void
+  onActivity?: (entry: { kind: 'thought' | 'tool' | 'result' | 'approval' | 'system'; message: string; ts: number }) => void
+  onApprovalRequest?: (request: {
+    id: string
+    type: 'command'
+    title: string
+    description: string
+    command: string
+  }) => Promise<boolean>
+  onTrace?: (entry: ToolCallTraceEntry) => void
+}
+
+interface ExecutorHelpers {
+  needsApproval: (command: string) => boolean
+  truncate: (text: string, limit: number) => string
+  COMMAND_LIMIT: number
+}
+
+interface AccumulatedToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export async function runExecutorAgent(
   userMessage: string,
-  history: any[],
-  context: any,
-  helpers: any,
+  history: AgentMessage[],
+  context: ExecutorContext,
+  helpers: ExecutorHelpers,
   plannerContext: string
 ): Promise<{ finalResponse: string, toolCallsCount: number }> {
   const ai = getOpenAI()
@@ -51,7 +101,7 @@ Only run commands that are strictly necessary.
 Architect's Blueprint and Context:
 ${plannerContext}`
 
-  const messages: any[] = [
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
     ...history,
     { role: 'user', content: userMessage }
@@ -65,14 +115,14 @@ ${plannerContext}`
     depth++
     const stream = await ai.chat.completions.create({ model: 'gpt-4o', messages, tools, tool_choice: 'auto', stream: true, temperature: 0.2 })
     let currentResponse = ''
-    const toolCalls: any[] = []
+    const toolCalls: AccumulatedToolCall[] = []
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta
       if (delta?.content) { currentResponse += delta.content; onToken(delta.content) }
       if (delta?.tool_calls) {
         for (const tc of delta.tool_calls) {
-          if (!toolCalls[tc.index]) toolCalls[tc.index] = { id: tc.id, type: tc.type, function: { name: tc.function?.name || '', arguments: '' } }
+          if (!toolCalls[tc.index]) toolCalls[tc.index] = { id: tc.id ?? `toolcall-${tc.index}`, type: 'function', function: { name: tc.function?.name || '', arguments: '' } }
           if (tc.function?.arguments) toolCalls[tc.index].function.arguments += tc.function.arguments
         }
       }
@@ -86,7 +136,8 @@ ${plannerContext}`
       for (const call of toolCalls) {
         totalToolCalls++
         const name = call.function.name
-        let args: any; try { args = JSON.parse(call.function.arguments) } catch { args = {} }
+        let args: Record<string, unknown>
+        try { args = JSON.parse(call.function.arguments) as Record<string, unknown> } catch { args = {} }
         onToolCall(name, args)
         onActivity?.({ kind: 'tool', message: `Executor running ${name}`, ts: Date.now() })
         
@@ -120,11 +171,10 @@ ${plannerContext}`
             }
           }
           else if (name === 'verifyInBrowser') {
-            const { runBrowserSession } = require('./browserTools')
             onTrace?.({ tool: name, detail: `Loading ${String(args.url || '')}`, ts: Date.now() })
             result = await runBrowserSession(String(args.url || ''), String(args.script || ''))
           }
-        } catch (err: any) { result = `Error: ${err.message}` }
+        } catch (err: unknown) { result = `Error: ${getErrorMessage(err)}` }
         
         onToolResult(name, result)
         onActivity?.({ kind: 'result', message: `${name}: ${result.slice(0, 200)}`, ts: Date.now() })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { TaskItem, TaskRun } from '../../../src/vite-env'
+import type { TaskItem, TaskRun } from '../../../vite-env'
 import type { TaskSidebarProps, TaskRunSectionsProps, PlanSnapshotListProps, ActivityLogListProps } from './chatPanelTypes'
 import { formatDuration } from './chatPanelUtils'
 import { DiffViewer } from './DiffViewer'

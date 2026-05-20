@@ -1,5 +1,5 @@
 .app { display: flex; height: 100vh; }
-.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
 
 .welcome { flex: 1; display: flex; align-items: center; justify-content: center; }
 .welcomeInner { text-align: center; max-width: 560px; }
@@ -47,90 +47,174 @@
   line-height: 1.5;
 }
 
-.workspace { display: flex; flex-direction: column; height: 100%; }
+.workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 .workspaceNotice {
-  margin: 12px 24px 0;
+  margin: 14px auto 0;
+  width: min(calc(100% - 48px), 1560px);
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #3d4b1f;
   background: #1e2710;
   color: #d8ebb0;
-  font-size: 13px;
+  font-size: 14px;
 }
 .workspaceHeader {
-  padding: 20px 28px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  background: linear-gradient(180deg, rgba(24, 24, 27, 0.8) 0%, rgba(24, 24, 27, 0.3) 100%);
-  backdrop-filter: blur(12px);
+  background: rgba(15, 15, 18, 0.58);
 }
-.workspaceHeader h2 { font-size: 18px; font-weight: 700; }
-.folderPath { font-size: 12px; color: var(--text-muted); }
+.workspaceHeaderInner {
+  width: min(calc(100% - 8px), 1560px);
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.workspaceIntro {
+  min-width: 0;
+}
+.workspaceHeader h2 { font-size: 22px; font-weight: 650; line-height: 1.15; }
+.folderPath { font-size: 13px; color: var(--text-muted); }
+.workspaceMetaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.workspaceMetaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
 .statusRow {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.agentState {
+  font-size: 13px;
+  color: #86efac;
+  font-weight: 600;
 }
 .statusPill {
   font-size: 11px;
-  padding: 3px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
 }
 .statusPill.ok { color: #b9f6ca; background: #12351f; }
 .statusPill.warn { color: #fbe7a2; background: #3a2f0d; }
-.statusPill.neutral { color: var(--text-muted); background: var(--surface2); }
-.workspaceBadge {
-  background: rgba(74, 222, 128, 0.1); color: var(--green);
-  padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
-  border: 1px solid rgba(74, 222, 128, 0.2);
-  box-shadow: 0 0 10px rgba(74, 222, 128, 0.1);
+.statusText {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.workspaceActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.headerActionsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.headerActionBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 13px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.headerActionBtn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.accountRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.briefingStrip {
+.overviewGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-  gap: 16px;
-  padding: 20px 28px;
-  border-bottom: 1px solid var(--border);
+  grid-template-columns: 1fr;
+  gap: 10px;
+  width: min(calc(100% - 48px), 1560px);
+  margin: 0 auto;
+  padding: 12px 0 0;
   background: transparent;
 }
-.briefingMain, .briefingSide > div {
+.briefingMain,
+.overviewCard {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px 20px;
-  backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-  transition: transform 0.2sease, box-shadow 0.2s ease;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
-.briefingMain:hover, .briefingSide > div:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+.briefingMain:hover, .overviewCard:hover {
+  background: rgba(30, 30, 34, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
 }
-.briefingMain p, .briefingSide li {
+.briefingMain p,
+.overviewCard li {
   font-size: 13px;
   color: var(--text-muted);
   line-height: 1.5;
 }
-.briefingSide {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+.briefingMain p {
+  margin-top: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.briefingSide li:empty::after {
+.overviewRail {
+  display: none;
+  gap: 10px;
+  align-content: start;
+}
+.overviewCard li:empty::after {
   content: 'None yet';
   color: var(--text-muted);
 }
-.briefingSide ul {
-  margin-top: 8px;
+.overviewCard ul {
+  margin-top: 6px;
   padding-left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+}
+.overviewBlock + .overviewBlock {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.overviewBlock strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
 }
 .briefingLabel {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
@@ -139,18 +223,18 @@
 .gitStrip {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
-  gap: 16px;
-  padding: 0 28px 20px;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  padding: 12px 24px 20px;
   background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 8px;
 }
 .gitCard {
-  background: var(--surface);
+  background: rgba(18, 18, 22, 0.72);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px 20px;
-  backdrop-filter: blur(16px);
-  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: none;
 }
 .gitCard p {
   margin-top: 8px;
@@ -165,28 +249,6 @@
   color: var(--text-muted);
 }
 
-.usageBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 28px;
-  background: rgba(9, 9, 11, 0.6);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.usageBarLeft {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.usageBarRight {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .usagePlanPill {
   font-size: 10px;
   text-transform: uppercase;
@@ -215,7 +277,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .usageCallsLabel.exhausted { color: #f87171; }
@@ -238,17 +300,17 @@
   background: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);
-  font-size: 11px;
-  padding: 3px 8px;
+  font-size: 12px;
+  padding: 5px 10px;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.12s;
 }
 .usageUpgradeBtn:hover { background: var(--accent); color: #fff; }
 .usageUserEmail {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
-  max-width: 180px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -257,16 +319,25 @@
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 11px;
-  padding: 3px 8px;
+  font-size: 12px;
+  padding: 5px 10px;
   border-radius: 999px;
   cursor: pointer;
 }
 .usageSignoutBtn:hover { color: var(--text); border-color: #666; }
+.compactUsageRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(calc(100% - 48px), 1560px);
+  margin: 0 auto;
+  padding: 8px 0 10px;
+}
 
 .syncIndicator {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
   white-space: nowrap;
@@ -280,7 +351,231 @@
 @keyframes pulse-sync { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 @media (max-width: 1200px) {
-  .briefingStrip { grid-template-columns: 1fr; }
-  .briefingSide { grid-template-columns: 1fr; }
+  .workspaceHeaderInner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .workspaceActions {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .headerActionsRow {
+    width: 100%;
+  }
+  .accountRow {
+    flex-wrap: wrap;
+  }
+  .overviewGrid { grid-template-columns: 1fr; }
   .gitStrip { grid-template-columns: 1fr; }
 }
+
+/* ── Tabbed Workspace Redesign Styles ── */
+.tabsHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 24px;
+  background: rgba(10, 10, 12, 0.4);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.tabButton {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 550;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.tabButton:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tabButton.activeTab {
+  color: #fff;
+  background: var(--surface2);
+  border-color: var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.tabButton.activeTab::after {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  left: 10%;
+  width: 80%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.tabBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  text-align: center;
+  line-height: 1;
+}
+
+.badgeInfo {
+  background: rgba(129, 140, 248, 0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+}
+
+.badgeWarning {
+  background: rgba(250, 204, 21, 0.2);
+  color: #fef08a;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.badgeError {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.tabContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tabContent.noScroll {
+  overflow: hidden;
+}
+
+.overviewContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(calc(100% - 48px), 1560px);
+  margin: 0 auto;
+  padding: 16px 0 24px;
+}
+
+.briefingStrip {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+}
+
+.briefingMain {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.briefingMain:hover {
+  background: rgba(30, 30, 34, 0.85);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.briefingMain strong {
+  font-size: 15px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.briefingMain p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-top: 4px;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.briefingSide {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.briefingSide > div {
+  background: rgba(24, 24, 27, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.briefingSide > div:hover {
+  background: rgba(39, 39, 42, 0.65);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.briefingSide ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.briefingSide li {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  position: relative;
+  padding-left: 14px;
+}
+
+.briefingSide li::before {
+  content: '•';
+  position: absolute;
+  left: 2px;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.briefingSide li:empty::after {
+  content: 'None yet';
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+@media (max-width: 1200px) {
+  .briefingStrip {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .briefingSide {
+    grid-template-columns: 1fr;
+  }
+}
+

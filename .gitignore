@@ -12,3 +12,14 @@ Thumbs.db
 # Temp logs and patches
 dev.log
 patch*.js
+.npm-cache/
+
+# Generated TypeScript outputs in source directories
+*.tsbuildinfo
+electron.vite.config.js
+electron.vite.config.d.ts
+src/**/*.js
+src/**/*.jsx
+src/**/*.d.ts
+!src/vite-env.d.ts
+!src/renderer/src/vite-env.d.ts

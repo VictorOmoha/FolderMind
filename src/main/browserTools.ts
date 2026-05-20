@@ -1,5 +1,9 @@
 import puppeteer, { Browser, Page } from 'puppeteer'
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export async function runBrowserSession(
   url: string,
   script?: string,
@@ -33,8 +37,8 @@ export async function runBrowserSession(
       const result = await page.evaluate(script)
       return typeof result === 'string' ? result : JSON.stringify(result, null, 2)
     }
-  } catch (err: any) {
-    return `Browser session failed: \${err.message}`
+  } catch (err: unknown) {
+    return `Browser session failed: ${getErrorMessage(err)}`
   } finally {
     if (browser) await browser.close()
   }

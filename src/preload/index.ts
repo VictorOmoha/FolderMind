@@ -1,4 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { ChatMessage } from '../vite-env'
+
+function subscribe<T>(channel: string, cb: (data: T) => void) {
+  const listener = (_event: IpcRendererEvent, data: T) => cb(data)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
 
 contextBridge.exposeInMainWorld('foldermind', {
   createFolder: () => ipcRenderer.invoke('folder:create'),
@@ -31,20 +38,20 @@ contextBridge.exposeInMainWorld('foldermind', {
   getVoiceResult: (jobId: string) => ipcRenderer.invoke('voice:getResult', jobId),
   speakText: (text: string) => ipcRenderer.invoke('voice:speak', text),
   getSpeechResult: (jobId: string) => ipcRenderer.invoke('voice:getSpeechResult', jobId),
-  chat: (folderPath: string, message: string, history: any[], memory: string) => ipcRenderer.invoke('agent:chat', folderPath, message, history, memory),
+  chat: (folderPath: string, message: string, history: ChatMessage[], memory: string) => ipcRenderer.invoke('agent:chat', folderPath, message, history, memory),
   approve: (approvalId: string, approved: boolean) => ipcRenderer.invoke('agent:approve', approvalId, approved),
 
-  onToken: (cb: (token: string) => void) => { ipcRenderer.on('agent:token', (_e, t) => cb(t)); return () => ipcRenderer.removeAllListeners('agent:token') },
-  onToolCall: (cb: (data: { name: string; args: any }) => void) => { ipcRenderer.on('agent:toolCall', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:toolCall') },
-  onToolResult: (cb: (data: { name: string; result: string }) => void) => { ipcRenderer.on('agent:toolResult', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:toolResult') },
-  onMemoryUpdated: (cb: (memory: string) => void) => { ipcRenderer.on('agent:memoryUpdated', (_e, m) => cb(m)); return () => ipcRenderer.removeAllListeners('agent:memoryUpdated') },
-  onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => { ipcRenderer.on('folder:changed', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('folder:changed') },
-  onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => { ipcRenderer.on('agent:plan', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:plan') },
-  onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => { ipcRenderer.on('agent:activity', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:activity') },
-  onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => { ipcRenderer.on('agent:approvalRequested', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:approvalRequested') },
-  onJobsUpdated: (cb: (data: { folderPath: string; jobs: unknown[] }) => void) => { ipcRenderer.on('agent:jobsUpdated', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:jobsUpdated') },
-  onEventsUpdated: (cb: (data: { folderPath: string; events: unknown[] }) => void) => { ipcRenderer.on('agent:eventsUpdated', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('agent:eventsUpdated') },
-  onTasksUpdated: (cb: (data: { folderPath: string; tasks: unknown[] }) => void) => { ipcRenderer.on('tasks:updated', (_e, data) => cb(data)); return () => ipcRenderer.removeAllListeners('tasks:updated') },
+  onToken: (cb: (token: string) => void) => subscribe<string>('agent:token', cb),
+  onToolCall: (cb: (data: { name: string; args: unknown }) => void) => subscribe<{ name: string; args: unknown }>('agent:toolCall', cb),
+  onToolResult: (cb: (data: { name: string; result: string }) => void) => subscribe<{ name: string; result: string }>('agent:toolResult', cb),
+  onMemoryUpdated: (cb: (memory: string) => void) => subscribe<string>('agent:memoryUpdated', cb),
+  onFolderChanged: (cb: (data: { event: string; filePath: string }) => void) => subscribe<{ event: string; filePath: string }>('folder:changed', cb),
+  onPlan: (cb: (data: { goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }) => void) => subscribe<{ goal: string; steps: { id: string; text: string; status: 'pending' | 'active' | 'done' }[] }>('agent:plan', cb),
+  onActivity: (cb: (data: { kind: string; message: string; ts: number }) => void) => subscribe<{ kind: string; message: string; ts: number }>('agent:activity', cb),
+  onApprovalRequested: (cb: (data: { id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }) => void) => subscribe<{ id: string; type: string; title: string; description: string; command?: string; filepath?: string; diff?: string }>('agent:approvalRequested', cb),
+  onJobsUpdated: (cb: (data: { folderPath: string; jobs: unknown[] }) => void) => subscribe<{ folderPath: string; jobs: unknown[] }>('agent:jobsUpdated', cb),
+  onEventsUpdated: (cb: (data: { folderPath: string; events: unknown[] }) => void) => subscribe<{ folderPath: string; events: unknown[] }>('agent:eventsUpdated', cb),
+  onTasksUpdated: (cb: (data: { folderPath: string; tasks: unknown[] }) => void) => subscribe<{ folderPath: string; tasks: unknown[] }>('tasks:updated', cb),
 
   // Git operations
   gitStageFile: (folderPath: string, filepath: string) => ipcRenderer.invoke('git:stageFile', folderPath, filepath),

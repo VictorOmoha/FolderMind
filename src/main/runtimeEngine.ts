@@ -1,6 +1,6 @@
 import { exec } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
-import { basename, join, relative } from 'path'
+import { join, relative } from 'path'
 import { promisify } from 'util'
 import { hasApiKey, runAutonomousReview } from './agent'
 import { AgentFollowUpKind, getWorkflowDefinition, getWorkflowFollowUps, getWorkflowSteps } from './runtimeDefinitions'
@@ -270,6 +270,7 @@ export function queueVerificationFollowUpFromAnalysis(folderPath: string, comple
 
   const normalizedPolicy = {
     ...policy,
+    allowBackgroundAgent: true,
     verificationCommandRules: policy.verificationCommandRules || [],
     allowedVerificationCommands: policy.allowedVerificationCommands || [],
     maxJobAttempts: policy.maxJobAttempts || 3,
@@ -277,6 +278,7 @@ export function queueVerificationFollowUpFromAnalysis(folderPath: string, comple
     maxSuggestedTasksPerJob: policy.maxSuggestedTasksPerJob || 2,
     autoRunFileReview: policy.autoRunFileReview !== false,
     autoRunDiffSummary: policy.autoRunDiffSummary === true,
+    autoQueueTestRuns: true,
     autoCreateSuggestedTasks: policy.autoCreateSuggestedTasks !== false,
     requireApprovalForTestRuns: policy.requireApprovalForTestRuns !== false,
   }

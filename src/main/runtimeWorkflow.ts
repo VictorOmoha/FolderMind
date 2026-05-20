@@ -9,10 +9,10 @@ export function buildJobPlan(kind: AgentJobKind): AgentJobPlanStep[] {
 export function applyCheckpoint(job: AgentJob, phase: string, summary: string, extras?: Partial<AgentJob>): AgentJob {
   const basePlan = job.planSteps || buildJobPlan(job.kind)
   const activeIndex = basePlan.findIndex((step) => step.id === phase)
-  const planSteps = basePlan.map((step, index) => {
+  const planSteps: AgentJobPlanStep[] = basePlan.map((step, index) => {
     if (index < activeIndex) return { ...step, status: 'done' as const }
     if (step.id === phase) return { ...step, status: 'active' as const }
-    return { ...step, status: step.status === 'done' ? 'done' : 'pending' }
+    return { ...step, status: step.status === 'done' ? 'done' as const : 'pending' as const }
   })
   return {
     ...job,

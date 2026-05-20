@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { AgentJob, AgentRuntimeEvent, TaskItem } from '../../../../src/vite-env'
+import type { AgentJob, AgentRuntimeEvent, TaskItem } from '../../../vite-env'
 import styles from './AgentInbox.module.css'
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
   events: AgentRuntimeEvent[]
   tasks: TaskItem[]
   selectedJobId?: string | null
-  onSelectJob?: (jobId: string) => void
+  onSelectJob?: (jobId: string | null) => void
   onRunNow: () => Promise<void>
   onApproveJob: (jobId: string) => Promise<void>
   onRetryJob: (jobId: string) => Promise<void>
@@ -156,6 +156,7 @@ function eventLevelLabel(level: AgentRuntimeEvent['level']) {
 export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelectedJobId, onSelectJob, onRunNow, onApproveJob, onRetryJob, onDismissJob, onCreateTask, onOpenTask }: Props) {
   const [internalSelectedJobId, setInternalSelectedJobId] = useState<string | null>(null)
   const [filter, setFilter] = useState<InboxFilter>('needs_action')
+  const [expanded, setExpanded] = useState(false)
   const { filteredJobs, archivedRoots } = useMemo(() => {
     const sorted = [...jobs].sort((left, right) => getJobPriority(right) - getJobPriority(left))
     const resolvedRootIds = new Set(sorted.filter(isResolvedChainRoot).map((job) => job.id))
@@ -171,10 +172,13 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
     return { filteredJobs: liveJobs.slice(0, 8), archivedRoots: archived }
   }, [filter, jobs])
   const selectedJobId = controlledSelectedJobId ?? internalSelectedJobId
-  const setSelectedJobId = onSelectJob ?? setInternalSelectedJobId
+  const setSelectedJobId: (jobId: string | null) => void = onSelectJob ?? setInternalSelectedJobId
   const selectableJobs = useMemo(() => [...filteredJobs, ...archivedRoots], [archivedRoots, filteredJobs])
   const selectedJob = useMemo(() => selectableJobs.find((job) => job.id === selectedJobId) || filteredJobs[0] || archivedRoots[0] || null, [selectedJobId, selectableJobs, filteredJobs, archivedRoots])
   const panels = selectedJob ? structuredPanels(selectedJob) : []
+  const activeJobs = useMemo(() => jobs.filter((job) => !job.chainResolvedAt && job.status !== 'dismissed'), [jobs])
+  const needsActionCount = useMemo(() => activeJobs.filter((job) => job.status === 'blocked' || job.status === 'failed' || isActionable(job)).length, [activeJobs])
+  const runningCount = useMemo(() => activeJobs.filter((job) => job.status === 'running' || job.status === 'queued').length, [activeJobs])
   const linkedSuggestedTask = useMemo(() => {
     if (!selectedJob) return null
     return tasks.find((task) => task.suggestedByJobId === selectedJob.id) || (selectedJob.relatedTaskId ? tasks.find((task) => task.id === selectedJob.relatedTaskId) || null : null)
@@ -192,34 +196,47 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
     if (selectedJob?.id !== selectedJobId) {
       setSelectedJobId(selectedJob?.id || null)
     }
-  }, [filter, selectedJob, selectedJobId])
+  }, [filter, selectedJob, selectedJobId, setSelectedJobId])
 
   return (
-    <section className={`${styles.inbox} agent-card`}>
+    <section className={`${styles.inbox} ${!expanded ? styles.collapsed : ''} agent-card`}>
       <div className={styles.header}>
         <div>
           <h3>Agent Inbox</h3>
-          <p className="muted">Watcher and git-driven jobs queued from workspace activity.</p>
+          <p className="muted">
+            {needsActionCount > 0
+              ? `${needsActionCount} item${needsActionCount === 1 ? '' : 's'} need attention`
+              : runningCount > 0
+                ? `${runningCount} job${runningCount === 1 ? '' : 's'} running or queued`
+                : 'No urgent background work.'}
+          </p>
         </div>
-        <button className="btn-secondary" onClick={() => void onRunNow()}>Run now</button>
-      </div>
-
-      <div className={styles.filters}>
-        {(['needs_action', 'all', 'history'] as InboxFilter[]).map((option) => (
-          <button
-            key={option}
-            className={`btn-secondary ${filter === option ? 'active' : ''}`}
-            onClick={() => setFilter(option)}
-          >
-            {filterLabel(option)}
+        <div className={styles.headerActions}>
+          <button className="btn-secondary" onClick={() => void onRunNow()}>Run now</button>
+          <button className="btn-secondary" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? 'Hide' : 'Show'}
           </button>
-        ))}
+        </div>
       </div>
 
-      {filteredJobs.length === 0 ? (
-        <p className="muted">{filter === 'history' ? 'No completed history jobs yet.' : 'No autonomous jobs in this view yet.'}</p>
-      ) : (
-        <div className={styles.grid}>
+      {expanded && (
+        <>
+          <div className={styles.filters}>
+            {(['needs_action', 'all', 'history'] as InboxFilter[]).map((option) => (
+              <button
+                key={option}
+                className={`btn-secondary ${filter === option ? 'active' : ''}`}
+                onClick={() => setFilter(option)}
+              >
+                {filterLabel(option)}
+              </button>
+            ))}
+          </div>
+
+          {filteredJobs.length === 0 ? (
+            <p className="muted">{filter === 'history' ? 'No completed history jobs yet.' : 'No autonomous jobs in this view yet.'}</p>
+          ) : (
+            <div className={styles.grid}>
           <div className={styles.jobList}>
             {filteredJobs.map((job) => (
               <button
@@ -329,8 +346,8 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
                       <div className={styles.panelHead}>
                         <span className={styles.panelTitle}>{panel.title}</span>
                         <div className={styles.panelActions}>
-                          {panel.copyValue && <button className="btn-secondary" onClick={() => void copyText(panel.copyValue)}>Copy</button>}
-                          {panel.taskText && <button className="btn-secondary" onClick={() => void onCreateTask(panel.taskText)}>Task</button>}
+                          {panel.copyValue && <button className="btn-secondary" onClick={() => void copyText(panel.copyValue!)}>Copy</button>}
+                          {panel.taskText && <button className="btn-secondary" onClick={() => void onCreateTask(panel.taskText!)}>Task</button>}
                         </div>
                       </div>
                       <div className={styles.panelBody}>{panel.body}</div>
@@ -379,7 +396,9 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
               {selectedJob.error && !selectedJob.result && <div className={styles.jobError}>{selectedJob.error}</div>}
             </div>
           )}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   )

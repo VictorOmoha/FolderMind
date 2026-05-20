@@ -6,6 +6,10 @@ interface UseVoiceOptions {
   onTranscript: (transcript: string) => void | Promise<void>
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: UseVoiceOptions) {
   const [listening, setListening] = useState(false)
   const [voiceBusy, setVoiceBusy] = useState(false)
@@ -15,7 +19,7 @@ export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: U
   
   const voiceAutoRestartRef = useRef(false)
   const voicePendingRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const recognitionRef = useRef<any>(null)
+  const recognitionRef = useRef<MediaRecorder | null>(null)
 
   const stopVoiceLoop = useCallback(() => {
     voiceAutoRestartRef.current = false
@@ -24,7 +28,7 @@ export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: U
       voicePendingRestartRef.current = null
     }
     if (recognitionRef.current && typeof recognitionRef.current.stop === 'function') {
-      try { recognitionRef.current.stop() } catch {}
+      try { recognitionRef.current.stop() } catch { /* ignore stop race */ }
     }
     setListening(false)
     setVoiceBusy(false)
@@ -89,8 +93,8 @@ export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: U
             await new Promise(resolve => setTimeout(resolve, 500))
           }
           setVoiceError('Voice transcription timed out.')
-        } catch (error: any) {
-          setVoiceError(error?.message || 'Unable to transcribe microphone input.')
+        } catch (error: unknown) {
+          setVoiceError(getErrorMessage(error) || 'Unable to transcribe microphone input.')
         } finally {
           setVoiceBusy(false)
           if (voiceAutoRestartRef.current) {
@@ -103,9 +107,9 @@ export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: U
       setTimeout(() => {
         if (recorder.state === 'recording') recorder.stop()
       }, 7000)
-    } catch (error: any) {
+    } catch (error: unknown) {
       setListening(false)
-      setVoiceError(error?.message || 'Unable to start microphone input.')
+      setVoiceError(getErrorMessage(error) || 'Unable to start microphone input.')
     }
   }, [onTranscript])
 
@@ -140,8 +144,8 @@ export function useVoice({ voiceAutoMode, voiceRepliesEnabled, onTranscript }: U
         await new Promise(resolve => setTimeout(resolve, 500))
       }
       setVoiceError('Voice reply timed out.')
-    } catch (error: any) {
-      setVoiceError(error?.message || 'Unable to play voice reply.')
+    } catch (error: unknown) {
+      setVoiceError(getErrorMessage(error) || 'Unable to play voice reply.')
     }
   }, [voiceRepliesEnabled])
 

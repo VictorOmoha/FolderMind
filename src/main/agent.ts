@@ -2,12 +2,8 @@ import { runPlannerAgent } from './plannerAgent'
 import { runCoderAgent } from './coderAgent'
 import { runExecutorAgent } from './executorAgent'
 import { OpenAI } from 'openai'
-import { dirname, join, normalize, relative, resolve } from 'path'
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'fs'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
+import { join, normalize, relative, resolve } from 'path'
+import { readFileSync, readdirSync, statSync } from 'fs'
 
 let openai: OpenAI | null = null
 
@@ -343,7 +339,7 @@ Keep memory concise and deduplicated. Do not include ephemeral chatter.`
           ? parsed.tasks.items
               .filter((item) => item && typeof item.text === 'string' && (item.status === 'suggested' || item.status === 'open' || item.status === 'done'))
               .slice(0, 20)
-          : current.tasks,
+          : current.tasks.items,
       },
     }
   } catch {
@@ -390,5 +386,4 @@ ${input.context}`,
 
   return res.choices[0].message.content?.trim() || '## What changed\n- Background review could not determine the impact.\n## Risks\n- Unable to assess risks.\n## Recommended next actions\n- Open the workspace and inspect the recent file changes.'
 }
-
 

@@ -93,6 +93,7 @@ export interface TaskRunTrace {
   tool: string
   detail: string
   ts: number
+  file?: string
   diff?: string
 }
 
