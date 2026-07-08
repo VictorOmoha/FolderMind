@@ -63,7 +63,7 @@
   cursor: pointer;
   transition: all 0.15s;
 }
-.togglePill.on { border-color: var(--accent); color: var(--text); background: rgba(99, 102, 241, 0.1); }
+.togglePill.on { border-color: var(--accent); color: var(--text); background: rgba(102, 114, 236, 0.1); }
 .togglePill:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .transcript {

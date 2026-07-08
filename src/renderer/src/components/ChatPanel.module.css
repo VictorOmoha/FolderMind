@@ -92,7 +92,7 @@
   font-family: inherit; line-height: 1.5;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(102, 114, 236, 0.2); }
 
 .btnSend {
   background: var(--accent); color: white; border: none;

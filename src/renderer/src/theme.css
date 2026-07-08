@@ -1,54 +1,94 @@
 :root {
-  --bg: #09090b; /* Deep dark background */
-  --surface: rgba(24, 24, 27, 0.65); /* Glass surface */
-  --surface2: rgba(39, 39, 42, 0.75); /* Slightly lighter glass */
-  --surface3: rgba(63, 63, 70, 0.8);
-  --border: rgba(255, 255, 255, 0.1); /* Subtle bright borders */
-  --accent: #818cf8; /* Vibrant indigo */
-  --accent-hover: #6366f1;
-  --text: #f8fafc; /* Crisp white */
-  --text-muted: #94a3b8; /* Soft blue-grey */
-  --green: #4ade80;
-  --yellow: #facc15;
-  --red: #f87171;
-  --radius: 12px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* ── Refined dark: solid surfaces, hairline borders, one flat accent ──────── */
+  --bg: #0d0e13;              /* near-black, slightly cool */
+  --surface: #111218;         /* card */
+  --surface2: #16171d;        /* raised */
+  --surface3: #1b1d26;        /* hover / active */
+  --border: #20222b;          /* hairline */
+  --border-strong: #2a2d38;
+
+  --accent: #6672ec;          /* single flat indigo — used sparingly */
+  --accent-hover: #5661e0;
+  --accent-soft: #1a1c2b;     /* faint accent-tinted surface */
+
+  --text: #e6e7ea;
+  --text-muted: #8b8d98;
+  --text-dim: #676a76;
+
+  --green: #7fd6a3;
+  --yellow: #e0b24b;
+  --red: #f0787c;
+
+  --radius-sm: 7px;
+  --radius: 9px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --font-body: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  font-family: var(--font-body);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
-
-.btn-primary {
-  background: var(--accent); color: white; border: none;
-  padding: 9px 14px; border-radius: var(--radius);
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: background 0.15s;
+body {
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-primary.large { padding: 14px 24px; font-size: 15px; border-radius: 12px; }
+
+h1, h2, h3 { letter-spacing: -0.01em; }
+
+/* ── Buttons: flat, tight, no glow ────────────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-primary:active { background: var(--accent-hover); }
+.btn-primary.large { padding: 12px 22px; font-size: 14px; }
 
 .btn-secondary {
-  background: var(--surface2); color: var(--text); border: 1px solid var(--border);
-  padding: 9px 14px; border-radius: var(--radius);
-  font-size: 13px; cursor: pointer; transition: background 0.15s;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
 }
-.btn-secondary:hover { background: var(--border); }
-.btn-secondary.large { padding: 14px 24px; font-size: 15px; border-radius: 12px; }
+.btn-secondary:hover { background: var(--surface3); border-color: var(--border-strong); }
+.btn-secondary.large { padding: 12px 22px; font-size: 14px; }
 
+/* ── Card ─────────────────────────────────────────────────────────────────── */
 .agent-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: var(--radius);
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .agent-card h3 {
-  font-size: 13px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  font-weight: 600;
   color: var(--text-muted);
 }
 

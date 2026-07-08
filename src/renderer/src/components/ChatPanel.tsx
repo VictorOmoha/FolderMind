@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import type { AgentJob, TaskItem, ChatMessage } from '../../../src/vite-env'
+import { useState, useRef, useEffect } from 'react'
+import type { AgentJob, TaskItem, ChatMessage } from '../../../../src/vite-env'
 import type { Message } from './chatPanelTypes'
 import { ChatEmptyState } from './ChatEmptyState'
 import { ChatMessageList } from './ChatMessageList'
@@ -18,6 +18,7 @@ interface Props {
   jobs: AgentJob[]
   selectedTaskId: string | null
   hasApiKey: boolean
+  archetype?: string
   canSendAI?: boolean
   onRunTask: (task: TaskItem) => Promise<string | null>
   onAddTask: (text: string) => void
@@ -29,7 +30,7 @@ interface Props {
   onUsageLimitHit?: () => void
 }
 
-export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selectedTaskId, hasApiKey, canSendAI = true, onRunTask, onAddTask, onToggleTask, onDeleteTask, onSelectTask, onSelectJob, onAfterAICall, onUsageLimitHit }: Props) {
+export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selectedTaskId, hasApiKey, archetype, canSendAI = true, onRunTask, onAddTask, onToggleTask, onDeleteTask, onSelectTask, onSelectJob, onAfterAICall, onUsageLimitHit }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [taskInput, setTaskInput] = useState('')
@@ -61,10 +62,8 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
     voiceSpeaking,
     voiceError,
     lastTranscript,
-    setVoiceError,
     toggleVoice,
-    speakText,
-    stopVoiceLoop
+    speakText
   } = useVoice({
     voiceAutoMode,
     voiceRepliesEnabled,
@@ -203,7 +202,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
     <div className={styles.shell}>
       <div className={styles.panel}>
         {showEmptyState
-          ? <ChatEmptyState folderName={folderName} hasApiKey={hasApiKey} onPrompt={setInput} />
+          ? <ChatEmptyState folderName={folderName} hasApiKey={hasApiKey} archetype={archetype} onPrompt={setInput} />
           : <ChatMessageList messages={messages} streamingContent={streamingContent} currentTool={currentTool} loading={loading} bottomRef={bottomRef} />}
 
         {!canSendAI && (

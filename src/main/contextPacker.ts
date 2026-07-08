@@ -3,8 +3,13 @@ import { join } from 'path'
 
 const DEFAULT_IGNORE = new Set([
   '.git', 'node_modules', 'dist', 'out', 'release', 'build', '.foldermind', 'coverage',
-  '.DS_Store', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'
+  '.DS_Store', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+  // Do not pack secrets/credentials into a prompt sent to a third-party API
+  '.env', '.env.local', '.env.development', '.env.production', 'id_rsa', 'id_ed25519', '.npmrc', '.netrc'
 ])
+
+// Filenames/extensions that commonly hold secrets — excluded from packed context.
+const SECRET_PATTERNS = [/(^|\/)\.env(\.|$)/i, /\.pem$/i, /\.key$/i, /\.pfx$/i, /\.p12$/i, /(^|\/)id_(rsa|ed25519|dsa|ecdsa)/i, /credentials?\.json$/i]
 
 const BINARY_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico',
@@ -46,19 +51,20 @@ export function packWorkspaceContext(folderPath: string): string {
       } else {
         const ext = currentRelPath.includes('.') ? currentRelPath.substring(currentRelPath.lastIndexOf('.')) : ''
         if (BINARY_EXTS.has(ext.toLowerCase())) continue
+        if (SECRET_PATTERNS.some((pattern) => pattern.test(currentRelPath))) continue
 
         // Check if file is small enough to consider reading
         if (stat.size > 250000) continue // Skip files > 250KB
 
         try {
           const content = readFileSync(fullPath, 'utf8')
-          
-          // Basic heuristic to skip minified files or huge non-text files
-          if (content.indexOf('\\0') !== -1 || content.split('\\n').length < content.length / 500) {
+
+          // Skip binary blobs (NUL byte) or minified files (very few newlines relative to length)
+          if (content.indexOf('\0') !== -1 || content.split('\n').length < content.length / 500) {
             continue
           }
 
-          const fileHeader = `\\n\\n--- \${currentRelPath} ---\\n`
+          const fileHeader = `\n\n--- ${currentRelPath} ---\n`
           const contentToAdd = fileHeader + content
           
           if (totalChars + contentToAdd.length > MAX_TOTAL_CHARS) {

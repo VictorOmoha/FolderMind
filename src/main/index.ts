@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
-import { join, relative } from 'path'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, readdirSync, statSync } from 'fs'
+import { join, relative, resolve as resolve0, sep } from 'path'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, createReadStream, readdirSync, statSync, appendFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import * as http from 'http'
 import { lookup } from 'mime-types'
@@ -8,15 +8,17 @@ import chokidar from 'chokidar'
 import { OpenAI } from 'openai'
 import { exec, execFile } from 'child_process'
 import { promisify } from 'util'
+import { config as dotenvConfig } from 'dotenv'
 import { setApiKey, hasApiKey, runAgentLoop, updateMemoryAgent, extractStructuredMemory } from './agent'
+import { getLLM, hasLLM, setAuthContext, getStatus as getLlmStatus } from './llmClient'
 import { acknowledgeAgentJob, approveAgentJob, dismissAgentJob, ensureAgentRuntimeState, kickAgentRuntime, listAgentEvents, listAgentJobs, notifyAgentFileChange, queueTaskVerificationJob, retryAgentJob, type AgentJob, type AgentRuntimeEvent } from './runtime'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 
 try {
-  require('dotenv').config({ path: join(process.cwd(), '.env') })
-  require('dotenv').config({ path: join(__dirname, '../../.env') })
+  dotenvConfig({ path: join(process.cwd(), '.env') })
+  dotenvConfig({ path: join(__dirname, '../../.env') })
 } catch (e) {
   console.error('Dotenv error:', e)
 }
@@ -59,7 +61,7 @@ interface AgentConfig {
   }
 }
 
-interface TaskRunTrace { tool: string; detail: string; ts: number; diff?: string }
+interface TaskRunTrace { tool: string; detail: string; ts: number; diff?: string; file?: string; command?: string }
 interface TaskRunPlanStep { id: string; text: string; status: 'pending' | 'active' | 'done' }
 interface TaskRunPlanSnapshot { goal: string; steps: TaskRunPlanStep[]; ts: number }
 interface TaskRunActivityEntry { kind: string; message: string; ts: number }
@@ -100,7 +102,28 @@ function isRateLimited(): boolean {
   return false
 }
 let localPort = 0
-function startLocalServer(): Promise<number> { return new Promise((resolve) => { const rendererDir = join(__dirname, '../renderer'); const server = http.createServer((req, res) => { const urlPath = req.url === '/' || !req.url ? '/index.html' : req.url!; const filePath = join(rendererDir, urlPath.split('?')[0]); try { const mimeType = (lookup(filePath) || 'text/plain') as string; res.writeHead(200, { 'Content-Type': mimeType }); createReadStream(filePath).pipe(res) } catch { res.writeHead(200, { 'Content-Type': 'text/html' }); createReadStream(join(rendererDir, 'index.html')).pipe(res) } }); server.listen(0, '127.0.0.1', () => { localPort = (server.address() as { port: number }).port; resolve(localPort) }) }) }
+function startLocalServer(): Promise<number> {
+  return new Promise((resolve) => {
+    const rendererDir = resolve0(join(__dirname, '../renderer'))
+    const server = http.createServer((req, res) => {
+      const rawPath = req.url === '/' || !req.url ? '/index.html' : req.url
+      const decoded = decodeURIComponent(rawPath.split('?')[0])
+      // Resolve against the renderer dir and confirm the result stays inside it,
+      // otherwise `/../../etc/passwd`-style requests would read arbitrary files.
+      const candidate = resolve0(join(rendererDir, '.' + decoded))
+      const serveIndex = () => { res.writeHead(200, { 'Content-Type': 'text/html' }); createReadStream(join(rendererDir, 'index.html')).pipe(res) }
+      if (candidate !== rendererDir && !candidate.startsWith(rendererDir + sep)) { serveIndex(); return }
+      try {
+        const mimeType = (lookup(candidate) || 'text/plain') as string
+        res.writeHead(200, { 'Content-Type': mimeType })
+        const stream = createReadStream(candidate)
+        stream.on('error', () => { if (!res.headersSent) serveIndex() })
+        stream.pipe(res)
+      } catch { serveIndex() }
+    })
+    server.listen(0, '127.0.0.1', () => { localPort = (server.address() as { port: number }).port; resolve(localPort) })
+  })
+}
 
 let mainWindow: BrowserWindow | null = null
 let activeWatcher: ReturnType<typeof chokidar.watch> | null = null
@@ -111,7 +134,7 @@ const AGENT_DIR = '.foldermind'
 const voiceTranscriptions = new Map<string, { status: 'processing' | 'completed' | 'failed'; text?: string; error?: string }>()
 const voiceSpeech = new Map<string, { status: 'processing' | 'completed' | 'failed'; audioBase64?: string; mimeType?: string; error?: string }>()
 
-function getOpenAI() { const key = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY; return key ? new OpenAI({ apiKey: key }) : null }
+function getOpenAI() { return hasLLM() ? getLLM() : null }
 function getDefaultRuntimePolicy(archetype: AgentConfig['archetype'] = 'general'): AgentRuntimePolicy {
   if (archetype === 'codebase') {
     return {
@@ -288,7 +311,7 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
       const currentTask = current.tasks.items.find(t => t.id === taskId)
       const currentRun = currentTask?.runs?.find(r => r.id === run.id)
       if (!currentTask || !currentRun) return
-      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts, diff: trace.diff }].slice(-MAX_TRACE_ENTRIES)
+      currentRun.trace = [...(currentRun.trace || []), { tool: trace.tool, detail: trace.detail, ts: trace.ts, diff: trace.diff, file: trace.file, command: trace.command }].slice(-MAX_TRACE_ENTRIES)
       if (trace.file) currentRun.filesTouched = Array.from(new Set([...(currentRun.filesTouched || []), trace.file]))
       if (trace.command) currentRun.commands = Array.from(new Set([...(currentRun.commands || []), trace.command]))
       persistStructuredMemory(folderPath, current)
@@ -326,10 +349,49 @@ async function runTaskExecution(folderPath: string, taskId: string, event: Elect
 
 async function getGitStatus(folderPath: string): Promise<GitStatus> { try { const { stdout: inside } = await execAsync('git rev-parse --is-inside-work-tree', { cwd: folderPath }); if (!inside.trim().includes('true')) return { isRepo: false, branch: null, changedFiles: [], stagedFiles: [], untrackedFiles: [], aheadBehind: null, suggestedCommitMessage: null }; const [{ stdout: branchOut }, { stdout: statusOut }, { stdout: aheadBehindOut }] = await Promise.all([execAsync('git branch --show-current', { cwd: folderPath }), execAsync('git status --short', { cwd: folderPath }), execAsync('git status --short --branch', { cwd: folderPath })]); const lines = statusOut.split(/\r?\n/).filter(Boolean); const changedFiles: string[] = []; const stagedFiles: string[] = []; const untrackedFiles: string[] = []; for (const line of lines) { const status = line.slice(0, 2); const file = line.slice(3).trim(); changedFiles.push(file); if (status[0] && status[0] !== ' ' && status[0] !== '?') stagedFiles.push(file); if (status === '??') untrackedFiles.push(file) } const aheadBehindLine = aheadBehindOut.split(/\r?\n/)[0] || ''; const aheadBehindMatch = aheadBehindLine.match(/\[(.*?)\]/); const aheadBehind = aheadBehindMatch?.[1] || null; const suggestedCommitMessage = changedFiles.length > 0 ? buildCommitMessageSuggestion(changedFiles) : null; return { isRepo: true, branch: branchOut.trim() || null, changedFiles: changedFiles.slice(0, 20), stagedFiles: stagedFiles.slice(0, 20), untrackedFiles: untrackedFiles.slice(0, 20), aheadBehind, suggestedCommitMessage } } catch { return { isRepo: false, branch: null, changedFiles: [], stagedFiles: [], untrackedFiles: [], aheadBehind: null, suggestedCommitMessage: null } } }
 function buildCommitMessageSuggestion(files: string[]) { const lower = files.map(f => f.toLowerCase()); if (lower.some(f => f.includes('readme') || f.endsWith('.md'))) return 'docs: update project documentation'; if (lower.some(f => f.includes('package.json') || f.includes('lock'))) return 'chore: update project dependencies'; if (lower.some(f => f.endsWith('.tsx') || f.endsWith('.ts') || f.endsWith('.js'))) return 'feat: update application logic and UI'; if (lower.some(f => f.endsWith('.css'))) return 'style: refine application styling'; return 'chore: update workspace files' }
-async function collectOnboarding(projectName: string): Promise<Pick<AgentConfig, 'archetype' | 'goals' | 'constraints'>> { if (!mainWindow) return { archetype: 'general', goals: [], constraints: [] }; const { response: archetypeIndex } = await dialog.showMessageBox(mainWindow, { type: 'question', buttons: ['General', 'Codebase', 'Research', 'Content', 'Operations'], defaultId: 0, cancelId: 0, title: 'Choose folder archetype', message: `What kind of folder is "${projectName}"?`, detail: 'This helps FolderMind adapt its behavior, priorities, and suggestions.' }); const archetypes: AgentConfig['archetype'][] = ['general', 'codebase', 'research', 'content', 'operations']; const archetype = archetypes[archetypeIndex] || 'general'; const goalMap: Record<AgentConfig['archetype'], string[]> = { general: ['Keep the folder organized', 'Help execute tasks quickly'], codebase: ['Ship reliable code changes', 'Keep docs and implementation aligned'], research: ['Synthesize findings clearly', 'Preserve source-backed insights'], content: ['Produce polished content quickly', 'Maintain voice and consistency'], operations: ['Track work clearly', 'Reduce friction in repeatable workflows'] }; const constraintMap: Record<AgentConfig['archetype'], string[]> = { general: ['Do not make risky changes without approval'], codebase: ['Prefer minimal edits', 'Avoid destructive commands without approval'], research: ['Do not invent facts', 'Preserve citations and source context'], content: ['Preserve tone consistency', 'Do not overwrite final assets without approval'], operations: ['Avoid changing core records without approval', 'Keep outputs structured and traceable'] }; return { archetype, goals: goalMap[archetype], constraints: constraintMap[archetype] } }
+// Detect whether a folder is a code repository so we can default to the codebase lane.
+const CODE_MARKERS = new Set(['package.json', 'tsconfig.json', 'requirements.txt', 'pyproject.toml', 'go.mod', 'cargo.toml', 'pom.xml', 'build.gradle', 'gemfile', 'composer.json', 'pubspec.yaml', 'cmakelists.txt', 'makefile', 'dockerfile'])
+const CODE_DIRS = new Set(['src', 'lib', 'app', 'cmd', 'pkg', 'packages'])
+function detectArchetype(folderPath: string): AgentConfig['archetype'] {
+  try {
+    for (const item of readdirSync(folderPath)) {
+      const lower = item.toLowerCase()
+      if (item === '.git' || CODE_MARKERS.has(lower)) return 'codebase'
+      if (CODE_DIRS.has(lower)) { try { if (statSync(join(folderPath, item)).isDirectory()) return 'codebase' } catch { /* ignore */ } }
+      if (/\.(ts|tsx|js|jsx|py|go|rs|java|rb|php|c|cpp|h|swift|kt)$/i.test(item)) return 'codebase'
+    }
+  } catch { /* ignore */ }
+  return 'general'
+}
+async function collectOnboarding(projectName: string, suggested: AgentConfig['archetype'] = 'general'): Promise<Pick<AgentConfig, 'archetype' | 'goals' | 'constraints'>> { if (!mainWindow) return { archetype: suggested, goals: [], constraints: [] }; const archetypesList: AgentConfig['archetype'][] = ['general', 'codebase', 'research', 'content', 'operations']; const suggestedIndex = Math.max(0, archetypesList.indexOf(suggested)); const { response: archetypeIndex } = await dialog.showMessageBox(mainWindow, { type: 'question', buttons: ['General', 'Codebase', 'Research', 'Content', 'Operations'], defaultId: suggestedIndex, cancelId: suggestedIndex, title: 'Choose folder archetype', message: `What kind of folder is "${projectName}"?`, detail: suggested === 'codebase' ? 'This looks like a code repository — Codebase is preselected. This tunes FolderMind for reading, editing, and verifying code.' : 'This helps FolderMind adapt its behavior, priorities, and suggestions.' }); const archetypes: AgentConfig['archetype'][] = ['general', 'codebase', 'research', 'content', 'operations']; const archetype = archetypes[archetypeIndex] || 'general'; const goalMap: Record<AgentConfig['archetype'], string[]> = { general: ['Keep the folder organized', 'Help execute tasks quickly'], codebase: ['Ship reliable code changes', 'Keep docs and implementation aligned'], research: ['Synthesize findings clearly', 'Preserve source-backed insights'], content: ['Produce polished content quickly', 'Maintain voice and consistency'], operations: ['Track work clearly', 'Reduce friction in repeatable workflows'] }; const constraintMap: Record<AgentConfig['archetype'], string[]> = { general: ['Do not make risky changes without approval'], codebase: ['Prefer minimal edits', 'Avoid destructive commands without approval'], research: ['Do not invent facts', 'Preserve citations and source context'], content: ['Preserve tone consistency', 'Do not overwrite final assets without approval'], operations: ['Avoid changing core records without approval', 'Keep outputs structured and traceable'] }; return { archetype, goals: goalMap[archetype], constraints: constraintMap[archetype] } }
 
-function createWindow(): void { mainWindow = new BrowserWindow({ width: 1320, height: 860, minWidth: 1040, minHeight: 700, backgroundColor: '#0f0f0f', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: false }, title: 'FolderMind' }); if (process.env['ELECTRON_RENDERER_URL']) { mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']); mainWindow.webContents.openDevTools() } else { mainWindow.loadURL(`http://127.0.0.1:${localPort}/index.html`) } mainWindow.on('closed', () => { mainWindow = null }) }
-async function seedAgent(folderPath: string, projectName: string): Promise<void> { const agentDir = join(folderPath, AGENT_DIR); if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true }); const agentConfig = getAgentConfigPath(folderPath); if (!existsSync(agentConfig)) { const onboarding = await collectOnboarding(projectName); writeFileSync(agentConfig, JSON.stringify({ name: projectName, created: new Date().toISOString(), model: 'gpt-4o', tone: 'direct, practical, helpful', archetype: onboarding.archetype, goals: onboarding.goals, constraints: onboarding.constraints, guardrails: { requireApprovalForDangerousCommands: true, requireApprovalForFileChanges: true, runtime: getDefaultRuntimePolicy(onboarding.archetype) } }, null, 2)) } ensureStructuredMemory(folderPath, projectName); ensureAgentRuntimeState(folderPath) }
+function createWindow(): void {
+  mainWindow = new BrowserWindow({ width: 1320, height: 860, minWidth: 1040, minHeight: 700, backgroundColor: '#0f0f0f', webPreferences: { preload: join(__dirname, '../preload/index.js'), contextIsolation: true, nodeIntegration: false, sandbox: false }, title: 'FolderMind' })
+
+  // The renderer holds a powerful IPC bridge (file writes, command execution). Do not
+  // let it spawn child windows or navigate to remote origins that would inherit that
+  // bridge. External links open in the user's real browser instead.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  const isLocalOrigin = (url: string) => {
+    if (process.env['ELECTRON_RENDERER_URL'] && url.startsWith(process.env['ELECTRON_RENDERER_URL'])) return true
+    return url.startsWith(`http://127.0.0.1:${localPort}`)
+  }
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isLocalOrigin(url)) { event.preventDefault(); if (/^https?:\/\//i.test(url)) shell.openExternal(url) }
+  })
+
+  if (process.env['ELECTRON_RENDERER_URL']) { mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']); mainWindow.webContents.openDevTools() } else { mainWindow.loadURL(`http://127.0.0.1:${localPort}/index.html`) }
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    // Reject any in-flight approval prompts so their awaiting agent runs don't hang forever.
+    for (const resolver of pendingApprovals.values()) resolver(false)
+    pendingApprovals.clear()
+  })
+}
+async function seedAgent(folderPath: string, projectName: string): Promise<void> { const agentDir = join(folderPath, AGENT_DIR); if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true }); const agentConfig = getAgentConfigPath(folderPath); if (!existsSync(agentConfig)) { const onboarding = await collectOnboarding(projectName, detectArchetype(folderPath)); writeFileSync(agentConfig, JSON.stringify({ name: projectName, created: new Date().toISOString(), model: 'gpt-4o', tone: 'direct, practical, helpful', archetype: onboarding.archetype, goals: onboarding.goals, constraints: onboarding.constraints, guardrails: { requireApprovalForDangerousCommands: true, requireApprovalForFileChanges: true, runtime: getDefaultRuntimePolicy(onboarding.archetype) } }, null, 2)) } ensureStructuredMemory(folderPath, projectName); ensureAgentRuntimeState(folderPath) }
 function pushFolderChange(folderPath: string, event: string, filePath: string) { const existing = folderChangeLog.get(folderPath) || []; folderChangeLog.set(folderPath, [...existing, { event, filePath, ts: Date.now() }].slice(-MAX_FOLDER_CHANGE_LOG)) }
 function getRecentFolderChanges(folderPath: string) { return (folderChangeLog.get(folderPath) || []).slice(-MAX_RECENT_CHANGES).reverse() }
 function scanFolder(folderPath: string) { const files: string[] = []; const walk = (dir: string) => { for (const item of readdirSync(dir)) { if (IGNORED_DIRS.has(item)) continue; const full = join(dir, item); let stat; try { stat = statSync(full) } catch { continue } if (stat.isDirectory()) walk(full); else files.push(relative(folderPath, full)) } }; walk(folderPath); return files }
@@ -382,11 +444,21 @@ ipcMain.handle('tasks:update', async (_event, folderPath: string, taskId: string
 ipcMain.handle('tasks:delete', async (_event, folderPath: string, taskId: string) => deleteTask(folderPath, taskId))
 ipcMain.handle('tasks:run', async (event, folderPath: string, taskId: string) => runTaskExecution(folderPath, taskId, event))
 
-ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: any[], memory: string) => { if (isRateLimited()) return '⚠️ Rate limit: too many AI calls. Please wait a moment before sending another message.'; try { const finalResponse = await runAgentLoop(message, history, { folderPath, memory, profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory = [...getChatHistory(folderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(folderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(folderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(folderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(folderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(folderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: any) { console.error('Agent chat error:', e); return `⚠️ Error: ${e.message}` } })
+ipcMain.handle('agent:chat', async (event, folderPath: string, message: string, history: any[], memory: string) => { if (isRateLimited()) return '⚠️ Rate limit: too many AI calls. Please wait a moment before sending another message.'; try { const finalResponse = await runAgentLoop(message, history, { folderPath, memory, profile: readAgentConfig(folderPath), onToken: (token) => event.sender.send('agent:token', token), onToolCall: (name, args) => event.sender.send('agent:toolCall', { name, args }), onToolResult: (name, result) => event.sender.send('agent:toolResult', { name, result }), onPlan: (plan) => event.sender.send('agent:plan', plan), onActivity: (entry) => event.sender.send('agent:activity', entry), onApprovalRequest: (request) => new Promise<boolean>((resolve) => { pendingApprovals.set(request.id, resolve); event.sender.send('agent:approvalRequested', request) }) }); const persistedHistory: ChatMessage[] = [...getChatHistory(folderPath), { role: 'user', content: message, ts: Date.now() }, { role: 'assistant', content: finalResponse, ts: Date.now() }]; persistChatHistory(folderPath, persistedHistory); if (history.length > 0 && history.length % 5 === 0) { const currentStructured = loadStructuredMemory(folderPath); const conv = history.map(h => `${h.role}: ${h.content}`).join('\n') + `\nuser: ${message}\nassistant: ${finalResponse}`; const extracted = await extractStructuredMemory(folderPath, currentStructured, conv); const merged: StructuredMemory = { ...currentStructured, ...extracted, tasks: { items: withTaskIds(extracted.tasks.items) } }; const refreshedProject = await updateMemoryAgent(folderPath, flattenStructuredMemory(merged), conv); merged.project = refreshedProject || merged.project; persistStructuredMemory(folderPath, merged); event.sender.send('agent:memoryUpdated', flattenStructuredMemory(merged)) } return finalResponse } catch (e: any) { console.error('Agent chat error:', e); return `⚠️ Error: ${e.message}` } })
 
 ipcMain.handle('agent:approve', (_e, approvalId: string, approved: boolean) => { const resolver = pendingApprovals.get(approvalId); if (resolver) { resolver(approved); pendingApprovals.delete(approvalId); return true } return false })
 ipcMain.handle('agent:setKey', (_e, key: string) => { setApiKey(key); if (activeFolderPath) kickAgentRuntime(activeFolderPath, runtimeDeps); return true })
-ipcMain.handle('agent:status', () => ({ hasApiKey: hasApiKey() || !!(process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY) }))
+ipcMain.handle('agent:setAuthContext', (_e, token: string | null, planTier: 'free' | 'pro' | 'business') => { setAuthContext(token, planTier); if (activeFolderPath) kickAgentRuntime(activeFolderPath, runtimeDeps); return true })
+// Local feedback fallback: used when Firebase isn't configured (dev/preview) so pilot
+// feedback is never lost. Appends one JSON line to userData/feedback.jsonl.
+ipcMain.handle('feedback:submitLocal', (_e, entry: Record<string, unknown>) => {
+  try {
+    const path = join(app.getPath('userData'), 'feedback.jsonl')
+    appendFileSync(path, JSON.stringify({ ...entry, ts: Date.now() }) + '\n', 'utf-8')
+    return { ok: true, path }
+  } catch (e: any) { return { ok: false, error: e.message } }
+})
+ipcMain.handle('agent:status', () => ({ hasApiKey: hasApiKey(), ...getLlmStatus() }))
 ipcMain.handle('voice:transcribe', async (_e, audioBase64: string) => {
   const jobId = randomUUID()
   voiceTranscriptions.set(jobId, { status: 'processing' })
@@ -405,7 +477,7 @@ ipcMain.handle('voice:transcribe', async (_e, audioBase64: string) => {
     return { jobId }
   }
 })
-ipcMain.handle('voice:getResult', async (_e, jobId: string) => voiceTranscriptions.get(jobId) || { status: 'failed', error: 'Voice transcription job not found.' })
+ipcMain.handle('voice:getResult', async (_e, jobId: string) => { const result = voiceTranscriptions.get(jobId) || { status: 'failed' as const, error: 'Voice transcription job not found.' }; if (result.status !== 'processing') voiceTranscriptions.delete(jobId); return result })
 ipcMain.handle('voice:speak', async (_e, text: string) => {
   const jobId = randomUUID()
   voiceSpeech.set(jobId, { status: 'processing' })
@@ -417,7 +489,7 @@ ipcMain.handle('voice:speak', async (_e, text: string) => {
       model: 'gpt-4o-mini-tts' as any,
       voice: 'alloy' as any,
       input: text,
-      format: 'mp3' as any,
+      response_format: 'mp3',
     })
     const arrayBuffer = await response.arrayBuffer()
     const audioBase64 = Buffer.from(arrayBuffer).toString('base64')
@@ -428,7 +500,7 @@ ipcMain.handle('voice:speak', async (_e, text: string) => {
     return { jobId }
   }
 })
-ipcMain.handle('voice:getSpeechResult', async (_e, jobId: string) => voiceSpeech.get(jobId) || { status: 'failed', error: 'Voice speech job not found.' })
+ipcMain.handle('voice:getSpeechResult', async (_e, jobId: string) => { const result = voiceSpeech.get(jobId) || { status: 'failed' as const, error: 'Voice speech job not found.' }; if (result.status !== 'processing') voiceSpeech.delete(jobId); return result })
 ipcMain.handle('folder:openInExplorer', (_e, folderPath: string, target: string) => shell.openPath(target ? join(folderPath, target) : folderPath))
 
 // ── Memory read/write ────────────────────────────────────────────────────────

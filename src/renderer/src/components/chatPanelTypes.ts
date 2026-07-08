@@ -1,4 +1,4 @@
-import type { AgentJob, TaskItem, TaskRun, TaskRunActivityEntry, TaskRunPlanSnapshot } from '../../../src/vite-env'
+import type { AgentJob, TaskItem, TaskRun, TaskRunActivityEntry, TaskRunPlanSnapshot } from '../../../../src/vite-env'
 import type { RefObject } from 'react'
 
 export interface Message {

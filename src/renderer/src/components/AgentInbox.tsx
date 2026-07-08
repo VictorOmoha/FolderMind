@@ -189,8 +189,8 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
       setFilter('all')
       return
     }
-    if (selectedJob?.id !== selectedJobId) {
-      setSelectedJobId(selectedJob?.id || null)
+    if (selectedJob?.id && selectedJob.id !== selectedJobId) {
+      setSelectedJobId(selectedJob.id)
     }
   }, [filter, selectedJob, selectedJobId])
 
@@ -329,8 +329,8 @@ export function AgentInbox({ jobs, events, tasks, selectedJobId: controlledSelec
                       <div className={styles.panelHead}>
                         <span className={styles.panelTitle}>{panel.title}</span>
                         <div className={styles.panelActions}>
-                          {panel.copyValue && <button className="btn-secondary" onClick={() => void copyText(panel.copyValue)}>Copy</button>}
-                          {panel.taskText && <button className="btn-secondary" onClick={() => void onCreateTask(panel.taskText)}>Task</button>}
+                          {panel.copyValue && <button className="btn-secondary" onClick={() => { const v = panel.copyValue; if (v) void copyText(v) }}>Copy</button>}
+                          {panel.taskText && <button className="btn-secondary" onClick={() => { const t = panel.taskText; if (t) void onCreateTask(t) }}>Task</button>}
                         </div>
                       </div>
                       <div className={styles.panelBody}>{panel.body}</div>

@@ -5,6 +5,18 @@ export const QUICK_PROMPTS = [
   'Look for risks, TODOs, or unfinished work in this folder.',
 ]
 
+const CODEBASE_PROMPTS = [
+  'Explain this project’s architecture and how the main pieces fit together.',
+  'Review my uncommitted changes and flag risks before I commit.',
+  'Find where a feature is implemented and walk me through how it works.',
+  'Add tests for the most recently changed files.',
+]
+
+// Suggestions shown in the empty chat state, tuned to the folder's archetype.
+export function quickPromptsFor(archetype?: string): string[] {
+  return archetype === 'codebase' ? CODEBASE_PROMPTS : QUICK_PROMPTS
+}
+
 export function formatDiffLines(diff?: string) {
   if (!diff) return []
   return diff.split(/\r?\n/).map((line, index) => ({

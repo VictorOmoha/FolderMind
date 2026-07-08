@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import type { GitStatus } from '../../../src/vite-env'
+import { useState } from 'react'
+import type { GitStatus } from '../../../../src/vite-env'
 import styles from './GitPanel.module.css'
 
 interface Props {

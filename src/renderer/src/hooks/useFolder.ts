@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { AgentJob, AgentRuntimeEvent, FolderBriefing, GitStatus, TaskItem } from '../../../src/vite-env'
+import type { AgentJob, AgentRuntimeEvent, FolderBriefing, GitStatus, TaskItem } from '../../../../src/vite-env'
 
 export interface SmartFolder {
   path: string

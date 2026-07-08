@@ -12,7 +12,7 @@ export function applyCheckpoint(job: AgentJob, phase: string, summary: string, e
   const planSteps = basePlan.map((step, index) => {
     if (index < activeIndex) return { ...step, status: 'done' as const }
     if (step.id === phase) return { ...step, status: 'active' as const }
-    return { ...step, status: step.status === 'done' ? 'done' : 'pending' }
+    return { ...step, status: step.status === 'done' ? ('done' as const) : ('pending' as const) }
   })
   return {
     ...job,

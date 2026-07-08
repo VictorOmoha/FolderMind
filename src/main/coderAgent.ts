@@ -1,7 +1,7 @@
 import { OpenAI } from 'openai'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { dirname } from 'path'
-import { getOpenAI } from './agent'
+import { getOpenAI, archetypeGuidance } from './agent'
 
 export async function runCoderAgent(
   userMessage: string,
@@ -11,7 +11,7 @@ export async function runCoderAgent(
   plannerContext: string
 ): Promise<{ finalResponse: string, toolCallsCount: number }> {
   const ai = getOpenAI()
-  const { folderPath, profile, onToken, onToolCall, onToolResult, onActivity, onApprovalRequest, onTrace } = context
+  const { folderPath, onToken, onToolCall, onToolResult, onActivity, onApprovalRequest, onTrace } = context
   const { safeJoin, buildSimpleDiff, applyPatchToContent, requestFileChangeApproval } = helpers
 
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -47,6 +47,8 @@ Your SOLE job is to write code and modify files based on the Architect's bluepri
 You CANNOT run shell commands.
 Prefer applyPatch for targeted edits. Use writeFile only for new files or full rewrites.
 When editing, make the smallest safe change needed.
+
+${archetypeGuidance(context.profile?.archetype)}
 
 Architect's Blueprint and Findings:
 ${plannerContext}`

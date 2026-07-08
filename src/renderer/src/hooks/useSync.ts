@@ -10,6 +10,7 @@ import {
   loadUserFolders,
   type CloudFolder,
 } from '../lib/sync'
+import { firebaseConfigured } from '../lib/firebase'
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error'
 
@@ -42,7 +43,7 @@ export function useSync(user: User | null) {
 
   // ── Load cloud folders on sign-in ─────────────────────────────────────────
   useEffect(() => {
-    if (!user) { setCloudFolders([]); setCloudFoldersLoaded(false); return }
+    if (!user || !firebaseConfigured) { setCloudFolders([]); setCloudFoldersLoaded(false); return }
     loadUserFolders(user)
       .then((folders) => { setCloudFolders(folders); setCloudFoldersLoaded(true) })
       .catch((err) => console.warn('[useSync] loadUserFolders error:', err))
@@ -50,7 +51,7 @@ export function useSync(user: User | null) {
 
   // ── Sync: folder opened/created ───────────────────────────────────────────
   const onFolderOpen = useCallback(async (folder: SmartFolder) => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     begin()
     try {
       await syncFolder(user, folder)
@@ -63,7 +64,7 @@ export function useSync(user: User | null) {
 
   // ── Sync: memory (debounced) ──────────────────────────────────────────────
   const onMemoryChange = useCallback((folderPath: string, memory: string) => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     if (memoryTimer.current) clearTimeout(memoryTimer.current)
     memoryTimer.current = setTimeout(async () => {
       begin()
@@ -74,7 +75,7 @@ export function useSync(user: User | null) {
 
   // ── Sync: tasks (debounced) ───────────────────────────────────────────────
   const onTasksChange = useCallback((folderPath: string, tasks: TaskItem[]) => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     if (tasksTimer.current) clearTimeout(tasksTimer.current)
     tasksTimer.current = setTimeout(async () => {
       begin()
@@ -85,7 +86,7 @@ export function useSync(user: User | null) {
 
   // ── Sync: chat (debounced) ────────────────────────────────────────────────
   const onChatMessages = useCallback((folderPath: string, messages: ChatMessage[]) => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     if (chatTimer.current) clearTimeout(chatTimer.current)
     chatTimer.current = setTimeout(async () => {
       begin()

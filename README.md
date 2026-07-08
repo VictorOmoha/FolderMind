@@ -81,7 +81,26 @@ Minimum local env:
 OPENAI_API_KEY=your_key_here
 ```
 
-Optional Firebase envs exist in the codebase but are not yet fully wired into the active desktop flow.
+Optional Firebase envs exist in the codebase for auth/sync.
+
+## AI access model (hybrid)
+
+FolderMind resolves LLM access centrally ([src/main/llmClient.ts](src/main/llmClient.ts)). Tools (file writes, commands) always run locally; only inference is ever remote.
+
+- **BYO mode** — the user has a personal OpenAI key (Settings or `OPENAI_API_KEY`). Calls go straight to OpenAI. Free, unlimited, key stays on their machine.
+- **Hosted mode** — no personal key but signed in. Calls route through the `chatGateway` Cloud Function, which verifies the Firebase token, enforces the plan's monthly quota, calls OpenAI with the **server** key, and meters usage. This is what makes billing enforceable.
+
+### Deploying the hosted gateway
+
+```bash
+cd functions
+cp .env.example .env        # set the SERVER OpenAI key + Stripe keys
+npm install && npm run build
+firebase deploy --only functions
+```
+
+Then set `FOLDERMIND_GATEWAY_URL` in the desktop app's `.env` to the deployed
+`chatGateway` URL (shown after deploy). Leave it empty to run BYO-only.
 
 ## Stack
 
@@ -106,11 +125,20 @@ FolderMind is being built toward:
 ## Not finished yet
 
 These are still incomplete or partially wired:
-- production-grade auth and billing flow in the active app
 - real cloud sync UX
 - true Whisper STT integration
 - OpenAI TTS voice output
 - collaborative/team handoff flows
+
+### ⚠️ Billing / paid tiers are NOT enforceable yet
+
+The Free/Pro/Business plan UI exists, but there is **no working billing or metering** behind it:
+
+- Usage counters live in the renderer and are client-writable — the limits are advisory UI only.
+- AI calls use **the user's own OpenAI key** (main process), so there is no server-side cost to meter or gate.
+- The Stripe checkout Cloud Function is now authenticated and sets the correct plan tier, but its only caller is a plain `<a href>` GET link in `landing/index.html`, which never matched the POST endpoint — so the purchase flow is not wired end to end.
+
+Making the paywall real requires proxying AI calls through an authenticated Cloud Function (so the server holds the key and can meter usage) and wiring an authenticated checkout call from a signed-in web context. Until then, treat the plan tiers as non-functional. `firestore.rules` has been hardened so a client can no longer self-assign a paid tier.
 
 ## Recommended next steps
 

@@ -7,16 +7,26 @@ import {
   signOut,
   type User,
 } from 'firebase/auth'
-import { auth, googleProvider } from '../lib/firebase'
+import { auth, googleProvider, firebaseConfigured } from '../lib/firebase'
 
 export type AuthState = 'loading' | 'authenticated' | 'unauthenticated'
 
+// Local preview bypass: ONLY active in `npm run dev` when Firebase is not configured.
+// Lets you click through the real UI without a Firebase project. Never triggers in a
+// production build (import.meta.env.DEV is false) or when Firebase env is set.
+const PREVIEW_MODE = import.meta.env.DEV && !firebaseConfigured
+const PREVIEW_USER = { uid: 'preview-user', email: 'preview@local', displayName: 'Preview User' } as unknown as User
+
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [authState, setAuthState] = useState<AuthState>('loading')
+  const [user, setUser] = useState<User | null>(PREVIEW_MODE ? PREVIEW_USER : null)
+  const [authState, setAuthState] = useState<AuthState>(PREVIEW_MODE ? 'authenticated' : 'loading')
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (PREVIEW_MODE) {
+      console.warn('[FolderMind] Preview mode: Firebase not configured — auth gate bypassed for local dev only.')
+      return
+    }
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u)
       setAuthState(u ? 'authenticated' : 'unauthenticated')

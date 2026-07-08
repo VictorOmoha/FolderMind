@@ -2,16 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatPanel } from './components/ChatPanel'
 import { SettingsModal } from './components/SettingsModal'
+import { FeedbackModal } from './components/FeedbackModal'
 import { AuthScreen } from './components/AuthScreen'
 import { UpgradeModal } from './components/UpgradeModal'
 import { GitPanel } from './components/GitPanel'
 import { AgentInbox } from './components/AgentInbox'
 import { useFolder } from './hooks/useFolder'
+import { firebaseConfigured } from './lib/firebase'
 import { useAuth } from './hooks/useAuth'
 import { useUsage } from './hooks/useUsage'
 import { useSync } from './hooks/useSync'
 import type { SmartFolder } from './hooks/useFolder'
-import type { TaskItem, AgentConfig } from '../../src/vite-env'
+import type { TaskItem, AgentConfig } from '../../../src/vite-env'
 import styles from './App.module.css'
 import './App.css'
 
@@ -60,15 +62,35 @@ export default function App() {
   const [upgradeReason, setUpgradeReason] = useState<'folders' | 'ai_calls' | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
+  const [workspaceTab, setWorkspaceTab] = useState<'chat' | 'overview' | 'agent' | 'git'>('chat')
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const headerButtonStyle = {
-    background: 'transparent', border: '1px solid #444', color: '#fff',
-    padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px',
+    background: 'var(--surface2)', border: '1px solid var(--border)', color: 'var(--text-muted)',
+    padding: '6px 12px', borderRadius: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: 500,
   } as const
 
   useEffect(() => {
     window.foldermind.getAgentStatus().then((s) => setHasApiKey(s.hasApiKey)).catch(() => setHasApiKey(false))
-  }, [])
+  }, [user, usage.planTier])
+
+  // Hand the main process a fresh Firebase ID token + plan so it can reach the hosted
+  // AI gateway. Refreshed periodically because ID tokens expire (~1h).
+  useEffect(() => {
+    let cancelled = false
+    const push = async () => {
+      if (!firebaseConfigured || !user) { window.foldermind.setAuthContext(null, usage.planTier); return }
+      try {
+        const token = await user.getIdToken()
+        if (!cancelled) window.foldermind.setAuthContext(token, usage.planTier)
+      } catch {
+        if (!cancelled) window.foldermind.setAuthContext(null, usage.planTier)
+      }
+    }
+    void push()
+    const id = setInterval(push, 45 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [user, usage.planTier])
 
   useEffect(() => {
     if (!activeFolder) return
@@ -194,6 +216,9 @@ export default function App() {
   const syncLabel = sync.status === 'syncing' ? '⟳ Syncing' : sync.status === 'synced' ? '☁ Synced' : sync.status === 'error' ? '⚠ Sync error' : ''
   const syncClass = `${styles.syncIndicator} ${styles[sync.status] || ''}`
 
+  // Jobs that still need attention — surfaced as a badge on the Agent Inbox tab
+  const pendingJobCount = jobs.filter((j) => j.status === 'queued' || j.status === 'running' || j.status === 'blocked').length
+
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className={styles.app}>
@@ -204,6 +229,7 @@ export default function App() {
         onOpenFolder={handleOpenFolder}
         onSelectFolder={handleSelectFolder}
         onOpenSettings={() => setSettingsOpen(true)}
+        onSendFeedback={() => setFeedbackOpen(true)}
       />
 
       <main className={styles.main}>
@@ -217,12 +243,12 @@ export default function App() {
                 Your AI agent can read, write, and execute code within your project.
               </p>
               {!hasApiKey && (
-                <p className={styles.welcomeNote}>Tip: open Settings and add your OpenAI API key before running tasks.</p>
+                <p className={styles.welcomeNote}>To enable AI: add your own OpenAI key in Settings (free & unlimited), or upgrade to Pro for hosted AI — no key needed.</p>
               )}
               <div className={styles.welcomeSteps}>
-                <div className={styles.welcomeStep}><span>1</span><div><strong>Create or open a folder</strong><p>Choose the workspace you want FolderMind to understand.</p></div></div>
-                <div className={styles.welcomeStep}><span>2</span><div><strong>Add your API key</strong><p>Use Settings for a session key, or place one in your local .env.</p></div></div>
-                <div className={styles.welcomeStep}><span>3</span><div><strong>Chat or run tasks</strong><p>Ask for a summary, code changes, planning help, or execute saved tasks.</p></div></div>
+                <div className={styles.welcomeStep}><span>1</span><div><strong>Open a code folder</strong><p>Point FolderMind at a repo — it detects code projects and tunes itself for reading, editing, and verifying.</p></div></div>
+                <div className={styles.welcomeStep}><span>2</span><div><strong>Connect AI</strong><p>Bring your own OpenAI key for free unlimited use, or go Pro for hosted AI with no key to manage.</p></div></div>
+                <div className={styles.welcomeStep}><span>3</span><div><strong>Chat or run tasks</strong><p>Ask it to explain the architecture, review your changes, or make a guarded edit — with approval before anything risky.</p></div></div>
               </div>
               <div className={styles.welcomeActions}>
                 <button className="btn-primary large" onClick={handleCreateFolder}>+ Create Smart Folder</button>
@@ -245,11 +271,11 @@ export default function App() {
                   {agentConfig?.tone && <span className={`${styles.statusPill} ${styles.neutral}`}>tone: {agentConfig.tone}</span>}
                 </div>
               </div>
-              <div className={styles.workspaceBadge} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button onClick={() => window.foldermind.openInExplorer(activeFolder.path, '')} style={headerButtonStyle}>📂 Open</button>
-                <button onClick={() => refreshBriefing?.()} style={headerButtonStyle}>✨ Brief</button>
-                <button onClick={() => setSettingsOpen(true)} style={headerButtonStyle}>⚙️ Settings</button>
-                <span>🧠 Agent Active</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button onClick={() => window.foldermind.openInExplorer(activeFolder.path, '')} style={headerButtonStyle}>Open</button>
+                <button onClick={() => refreshBriefing?.()} style={headerButtonStyle}>Brief</button>
+                <button onClick={() => setSettingsOpen(true)} style={headerButtonStyle}>Settings</button>
+                <span className={styles.workspaceBadge}>Agent Active</span>
               </div>
             </div>
 
@@ -283,95 +309,119 @@ export default function App() {
 
             {workspaceNotice && <div className={styles.workspaceNotice}>{workspaceNotice}</div>}
 
-            <div className={styles.briefingStrip}>
-              <div className={styles.briefingMain}>
-                <strong>Folder Brief</strong>
-                <p>{briefingLoading ? 'Generating folder briefing...' : briefingError ? briefingError : briefing?.summary || 'No briefing yet.'}</p>
-              </div>
-              <div className={styles.briefingSide}>
-                <div><span className={styles.briefingLabel}>Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-                <div><span className={styles.briefingLabel}>Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
-              </div>
-            </div>
+            <nav className={styles.workspaceTabs}>
+              <button className={`${styles.wsTab} ${workspaceTab === 'chat' ? styles.wsTabActive : ''}`} onClick={() => setWorkspaceTab('chat')}>Chat</button>
+              <button className={`${styles.wsTab} ${workspaceTab === 'overview' ? styles.wsTabActive : ''}`} onClick={() => setWorkspaceTab('overview')}>Overview</button>
+              <button className={`${styles.wsTab} ${workspaceTab === 'agent' ? styles.wsTabActive : ''}`} onClick={() => setWorkspaceTab('agent')}>
+                Agent Inbox{pendingJobCount > 0 && <span className={styles.wsTabBadge}>{pendingJobCount}</span>}
+              </button>
+              <button className={`${styles.wsTab} ${workspaceTab === 'git' ? styles.wsTabActive : ''}`} onClick={() => setWorkspaceTab('git')}>Git</button>
+            </nav>
 
-            <AgentInbox
-              tasks={tasks}
-              jobs={jobs}
-              events={events}
-              selectedJobId={selectedJobId}
-              onSelectJob={setSelectedJobId}
-              onRunNow={async () => {
-                if (!activeFolder) return
-                await window.foldermind.runAgentJobs(activeFolder.path)
-                refreshJobs?.()
-              }}
-              onApproveJob={async (jobId) => {
-                if (!activeFolder) return
-                await window.foldermind.approveAgentJob(activeFolder.path, jobId)
-                refreshJobs?.()
-                refreshTasks?.()
-              }}
-              onRetryJob={async (jobId) => {
-                if (!activeFolder) return
-                await window.foldermind.retryAgentJob(activeFolder.path, jobId)
-                refreshJobs?.()
-              }}
-              onDismissJob={async (jobId, reason) => {
-                if (!activeFolder) return
-                await window.foldermind.dismissAgentJob(activeFolder.path, jobId, reason)
-                refreshJobs?.()
-              }}
-              onCreateTask={async (text) => {
-                await addTask(text)
-                refreshTasks?.()
-              }}
-              onOpenTask={(taskId) => setSelectedTaskId(taskId)}
-            />
-
-            {gitStatus?.isRepo
-              ? <GitPanel
+            <div className={styles.workspaceBody}>
+              {workspaceTab === 'chat' && (
+                <ChatPanel
+                  folderName={activeFolder.name}
                   folderPath={activeFolder.path}
-                  gitStatus={gitStatus}
-                  onRefresh={() => refreshBriefing?.()}
+                  memory={activeFolder.memory}
+                  tasks={tasks}
+                  jobs={jobs}
+                  selectedTaskId={selectedTaskId}
+                  hasApiKey={hasApiKey}
+                  archetype={agentConfig?.archetype}
+                  canSendAI={canSendAI}
+                  onRunTask={handleRunTask}
+                  onAddTask={addTask}
+                  onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
+                  onDeleteTask={deleteTask}
+                  onSelectTask={setSelectedTaskId}
+                  onSelectJob={setSelectedJobId}
+                  onAfterAICall={handleAfterAICall}
+                  onUsageLimitHit={() => setUpgradeReason('ai_calls')}
                 />
-              : <div className={`${styles.gitStrip} ${styles.gitStripEmpty}`}><div className={`${styles.gitCard} ${styles.wide}`}><span className={styles.briefingLabel}>Git Status</span><p>This folder is not a git repository.</p></div><div className={styles.gitCard}><span className={styles.briefingLabel}>Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
-            }
+              )}
 
-            <ChatPanel
-              folderName={activeFolder.name}
-              folderPath={activeFolder.path}
-              memory={activeFolder.memory}
-              tasks={tasks}
-              jobs={jobs}
-              selectedTaskId={selectedTaskId}
-              hasApiKey={hasApiKey}
-              canSendAI={canSendAI}
-              onRunTask={handleRunTask}
-              onAddTask={addTask}
-              onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
-              onDeleteTask={deleteTask}
-              onSelectTask={setSelectedTaskId}
-              onSelectJob={setSelectedJobId}
-              onAfterAICall={handleAfterAICall}
-              onUsageLimitHit={() => setUpgradeReason('ai_calls')}
-            />
+              {workspaceTab === 'overview' && (
+                <div className={styles.tabScroll}>
+                  <div className={styles.briefingStrip}>
+                    <div className={styles.briefingMain}>
+                      <strong>Folder Brief</strong>
+                      <p>{briefingLoading ? 'Generating folder briefing...' : briefingError ? briefingError : briefing?.summary || 'No briefing yet.'}</p>
+                    </div>
+                    <div className={styles.briefingSide}>
+                      <div><span className={styles.briefingLabel}>Recent Changes</span><ul>{(recentChanges.length > 0 ? recentChanges : briefing?.recentChanges || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Suggestions</span><ul>{(briefing?.suggestions || []).slice(0, 3).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Open Tasks</span><ul>{(briefing?.openTasks || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                      <div><span className={styles.briefingLabel}>Key Decisions</span><ul>{(briefing?.keyDecisions || []).slice(0, 4).map((item, i) => <li key={i}>{item}</li>)}</ul></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {workspaceTab === 'agent' && (
+                <div className={styles.tabScroll}>
+                  <AgentInbox
+                    tasks={tasks}
+                    jobs={jobs}
+                    events={events}
+                    selectedJobId={selectedJobId}
+                    onSelectJob={setSelectedJobId}
+                    onRunNow={async () => {
+                      if (!activeFolder) return
+                      await window.foldermind.runAgentJobs(activeFolder.path)
+                      refreshJobs?.()
+                    }}
+                    onApproveJob={async (jobId) => {
+                      if (!activeFolder) return
+                      await window.foldermind.approveAgentJob(activeFolder.path, jobId)
+                      refreshJobs?.()
+                      refreshTasks?.()
+                    }}
+                    onRetryJob={async (jobId) => {
+                      if (!activeFolder) return
+                      await window.foldermind.retryAgentJob(activeFolder.path, jobId)
+                      refreshJobs?.()
+                    }}
+                    onDismissJob={async (jobId, reason) => {
+                      if (!activeFolder) return
+                      await window.foldermind.dismissAgentJob(activeFolder.path, jobId, reason)
+                      refreshJobs?.()
+                    }}
+                    onCreateTask={async (text) => {
+                      await addTask(text)
+                      refreshTasks?.()
+                    }}
+                    onOpenTask={(taskId) => setSelectedTaskId(taskId)}
+                  />
+                </div>
+              )}
+
+              {workspaceTab === 'git' && (
+                <div className={styles.tabScroll}>
+                  {gitStatus?.isRepo
+                    ? <GitPanel
+                        folderPath={activeFolder.path}
+                        gitStatus={gitStatus}
+                        onRefresh={() => refreshBriefing?.()}
+                      />
+                    : <div className={`${styles.gitStrip} ${styles.gitStripEmpty}`}><div className={`${styles.gitCard} ${styles.wide}`}><span className={styles.briefingLabel}>Git Status</span><p>This folder is not a git repository.</p></div><div className={styles.gitCard}><span className={styles.briefingLabel}>Suggestion</span><p>Run <code>git init</code> to unlock branch tracking, diffs, and commit workflow.</p></div></div>
+                  }
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
 
-      {activeFolder && (
-        <SettingsModal
-          open={settingsOpen}
-          folderName={activeFolder.name}
-          folderPath={activeFolder.path}
-          agentConfig={agentConfig}
-          onClose={() => setSettingsOpen(false)}
-          onSaveApiKey={handleSaveApiKey}
-          onSaveProfile={handleSaveProfile}
-        />
-      )}
+      <SettingsModal
+        open={settingsOpen}
+        folderName={activeFolder?.name}
+        folderPath={activeFolder?.path}
+        agentConfig={activeFolder ? agentConfig : null}
+        onClose={() => setSettingsOpen(false)}
+        onSaveApiKey={handleSaveApiKey}
+        onSaveProfile={handleSaveProfile}
+      />
 
       {upgradeReason && (
         <UpgradeModal
@@ -380,6 +430,13 @@ export default function App() {
           onUpgrade={() => { window.open('https://foldermind.app/pricing', '_blank'); setUpgradeReason(null) }}
         />
       )}
+
+      <FeedbackModal
+        open={feedbackOpen}
+        user={user}
+        context={{ plan: usage.planTier, archetype: agentConfig?.archetype, hasFolder: Boolean(activeFolder), tab: workspaceTab }}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </div>
   )
 }

@@ -1,35 +1,20 @@
 import { runPlannerAgent } from './plannerAgent'
 import { runCoderAgent } from './coderAgent'
 import { runExecutorAgent } from './executorAgent'
-import { OpenAI } from 'openai'
-import { dirname, join, normalize, relative, resolve } from 'path'
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync } from 'fs'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+import { join, normalize, relative, resolve } from 'path'
+import { readFileSync, readdirSync, statSync } from 'fs'
+import { getLLM, hasLLM, setUserKey } from './llmClient'
 
-const execAsync = promisify(exec)
-
-let openai: OpenAI | null = null
-
+// LLM access is resolved centrally by llmClient (BYO key vs hosted gateway).
 export function setApiKey(key: string) {
-  openai = new OpenAI({ apiKey: key })
+  setUserKey(key)
 }
 
 export function hasApiKey() {
-  return openai !== null || !!(process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY)
+  return hasLLM()
 }
 
-export const getOpenAI = () => {
-  if (!openai) {
-    const key = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY
-    if (key) {
-      openai = new OpenAI({ apiKey: key })
-    } else {
-      throw new Error('OpenAI API key is not set.')
-    }
-  }
-  return openai
-}
+export const getOpenAI = () => getLLM()
 
 interface AgentProfile {
   name?: string
@@ -104,8 +89,13 @@ const DANGEROUS_COMMAND_PATTERNS = [
   /\bcurl\b/i,
   /\bwget\b/i,
   /\binvoke-webrequest\b/i,
-  // Shell metacharacters that enable injection / chaining
-  /[|;&`]/,
+  // Interpreter one-liners can run arbitrary code that no keyword deny-list can vet
+  /\bnode\b[^\n]*\s-e\b/i,
+  /\b(python3?|ruby|perl|php)\b[^\n]*\s-(e|c)\b/i,
+  /\beval\b/i,
+  /\bnpx\b/i,
+  // Shell metacharacters that enable injection / chaining (newlines chain in bash too)
+  /[|;&`\n\r]/,
   // Command substitution
   /\$\(/,
   // Privilege escalation
@@ -159,6 +149,56 @@ function markPlan(plan: PlanState, activeId: string, doneIds: string[] = []): Pl
 
 function needsApproval(command: string) {
   return DANGEROUS_COMMAND_PATTERNS.some((pattern) => pattern.test(command))
+}
+
+// Injected into every agent's system prompt so behavior adapts to the folder type.
+// The codebase profile is the deepest — it's the primary lane.
+export function archetypeGuidance(archetype?: string): string {
+  switch (archetype) {
+    case 'codebase':
+      return `This is a CODE REPOSITORY. Work like a careful senior engineer:
+- Read the relevant files fully before proposing or making changes. Never guess file contents, APIs, or imports.
+- Make the smallest, surgical diff that solves the task. Match the existing style, naming, and structure.
+- Preserve existing behavior unless the task is to change it. Do not reformat unrelated code or add narration comments.
+- Prefer verifying with the project's own tooling (build, typecheck, tests, lint) over assuming correctness.
+- Reference code as file:line when explaining. Never introduce secrets, credentials, or hard-coded config.`
+    case 'research':
+      return `This is a RESEARCH workspace. Preserve citations and sources, never invent facts, and synthesize findings clearly with source-backed reasoning.`
+    case 'content':
+      return `This is a CONTENT workspace. Preserve the established voice and tone, and do not overwrite finished assets without clear intent.`
+    case 'operations':
+      return `This is an OPERATIONS workspace. Keep outputs structured and traceable, and avoid changing core records or trackers without care.`
+    default:
+      return `Keep changes safe and minimal. Read before you write, and prefer verification over assumption.`
+  }
+}
+
+// Allow-list of command shapes considered safe to run without an approval prompt.
+// This is intentionally a DEFAULT-DENY model: anything not matched here requires the
+// user to approve it, so an LLM cannot silently execute an arbitrary command. A
+// deny-list can always be evaded (interpreter one-liners, novel binaries); an
+// allow-list cannot. Each entry must match the WHOLE trimmed command.
+const AUTO_APPROVED_COMMAND_PATTERNS: RegExp[] = [
+  // Package manager: scripts, install/ci, list/why/outdated. No publish, no arbitrary `npm exec`.
+  /^npm\s+(run\s+[\w:-]+|test|ci|install|i|ls|list|why|outdated|version)\s*$/i,
+  /^(pnpm|yarn)\s+(run\s+[\w:-]+|test|install|list|why|outdated)\s*$/i,
+  // Read-only git inspection (no reset/clean/push/rebase/checkout — those mutate).
+  /^git\s+(status|diff|log|show|branch|remote|rev-parse|describe|blame)\b[\w\s./:@=-]*$/i,
+  // Build / typecheck / lint / test runners.
+  /^(tsc|eslint|prettier|jest|vitest|mocha|playwright)\b[\w\s./:@=-]*$/i,
+  /^(node|npm|pnpm|yarn|python3?)\s+--?version\s*$/i,
+  // Benign read-only shell inspection.
+  /^(ls|pwd|whoami|date|echo)\b[\w\s./:@=-]*$/i,
+  /^cat\s+[\w./-]+\s*$/i,
+]
+
+// True only when the command matches an allow-list entry AND carries no shell
+// metacharacters (which would let an approved prefix smuggle a second command).
+function isAutoApproved(command: string): boolean {
+  const trimmed = command.trim()
+  if (!trimmed) return false
+  if (/[|;&`$<>\n\r\\]/.test(trimmed) || /\$\(/.test(trimmed)) return false
+  return AUTO_APPROVED_COMMAND_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
 function searchInTree(folderPath: string, query: string, subpath = '.') {
@@ -252,7 +292,7 @@ export async function runAgentLoop(
   onPlan?.(plan)
   onActivity?.({ kind: 'system', message: 'Task planning started. Routing disabled monolithic agent removed.', ts: Date.now() })
 
-  const helpers = { truncate, safeJoin, searchInTree, IGNORED_DIRS, READ_LIMIT, COMMAND_LIMIT, DIFF_LIMIT, applyPatchToContent, buildSimpleDiff, requestFileChangeApproval, needsApproval }
+  const helpers = { truncate, safeJoin, searchInTree, IGNORED_DIRS, READ_LIMIT, COMMAND_LIMIT, DIFF_LIMIT, applyPatchToContent, buildSimpleDiff, requestFileChangeApproval, needsApproval, isAutoApproved }
 
   onActivity?.({ kind: 'system', message: 'Delegating to Planner Agent (Context Gathering)...', ts: Date.now() })
   const plannerResult = await runPlannerAgent(userMessage, history, context, helpers)
@@ -343,7 +383,7 @@ Keep memory concise and deduplicated. Do not include ephemeral chatter.`
           ? parsed.tasks.items
               .filter((item) => item && typeof item.text === 'string' && (item.status === 'suggested' || item.status === 'open' || item.status === 'done'))
               .slice(0, 20)
-          : current.tasks,
+          : current.tasks.items,
       },
     }
   } catch {

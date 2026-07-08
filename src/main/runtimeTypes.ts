@@ -125,7 +125,8 @@ export interface StructuredMemoryLike {
   project: string
   decisions: string
   preferences: string
-  tasks: { items: Array<{ text: string; status: 'suggested' | 'open' | 'done' }> }
+  archivedAgentHistory: string
+  tasks: { items: Array<{ id: string; text: string; status: 'suggested' | 'open' | 'done' }> }
 }
 
 export interface GitStatusLike {

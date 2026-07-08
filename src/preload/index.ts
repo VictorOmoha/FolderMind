@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('foldermind', {
   writeMemory: (folderPath: string, updates: { project?: string; decisions?: string; preferences?: string; archivedAgentHistory?: string }) => ipcRenderer.invoke('memory:write', folderPath, updates),
 
   setApiKey: (key: string) => ipcRenderer.invoke('agent:setKey', key),
+  setAuthContext: (token: string | null, planTier: 'free' | 'pro' | 'business') => ipcRenderer.invoke('agent:setAuthContext', token, planTier),
+  submitFeedbackLocal: (entry: Record<string, unknown>) => ipcRenderer.invoke('feedback:submitLocal', entry),
   getAgentStatus: () => ipcRenderer.invoke('agent:status'),
   transcribeVoice: (audioBase64: string) => ipcRenderer.invoke('voice:transcribe', audioBase64),
   getVoiceResult: (jobId: string) => ipcRenderer.invoke('voice:getResult', jobId),

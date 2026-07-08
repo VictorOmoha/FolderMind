@@ -1,7 +1,9 @@
 import { OpenAI } from 'openai'
 import { readdirSync, statSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { getOpenAI } from './agent'
+import { getOpenAI, archetypeGuidance } from './agent'
+import { packWorkspaceContext } from './contextPacker'
+import { semanticSearch } from './ragSearch'
 
 export async function runPlannerAgent(
   userMessage: string,
@@ -56,7 +58,7 @@ export async function runPlannerAgent(
     }
   ]
 
-  const { packWorkspaceContext } = require('./contextPacker')
+
   const packedContext = packWorkspaceContext(folderPath)
 
   const profileSection = profile ? `\nAgent Profile:\n- Name: ${profile.name || 'FolderMind Planner'}\n- Archetype: ${profile.archetype || 'general'}` : ''
@@ -66,6 +68,8 @@ Your SOLE job is to investigate the workspace and gather context needed to fulfi
 You ONLY have read-only tools. You cannot write code or run commands.
 Once you have retrieved all necessary context, output your final response summarizing what needs to be changed or executed by the Coder or Executor.
 Do NOT guess file contents. Use your tools.
+
+${archetypeGuidance(profile?.archetype)}
 
 --- Pre-packed Workspace Context ---
 Below is the pre-packed text content of the workspace files. Use this to avoid needing to manually readFile if the information is already here.
@@ -133,7 +137,7 @@ ${packedContext}
              onTrace?.({ tool: name, detail: `Searched for "${String(args.query || '')}"`, ts: Date.now() })
              result = searchInTree(folderPath, String(args.query || ''), String(args.subpath || '.'))
           } else if (name === 'semanticSearch') {
-             const { semanticSearch } = require('./ragSearch')
+
              onTrace?.({ tool: name, detail: `Semantic search for "${String(args.query || '')}"`, ts: Date.now() })
              result = await semanticSearch(folderPath, String(args.query || ''), Number(args.topK || 5))
           }

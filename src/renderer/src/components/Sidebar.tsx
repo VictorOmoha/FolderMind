@@ -8,9 +8,10 @@ interface Props {
   onOpenFolder: () => void
   onSelectFolder: (folder: SmartFolder) => void
   onOpenSettings: () => void
+  onSendFeedback: () => void
 }
 
-export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFolder, onSelectFolder, onOpenSettings }: Props) {
+export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFolder, onSelectFolder, onOpenSettings, onSendFeedback }: Props) {
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
@@ -52,6 +53,7 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
             Open a folder to activate memory, briefing, tasks, and agent tools.
           </div>
         )}
+        <button className={styles.feedbackBtn} onClick={onSendFeedback}>💬 Send feedback</button>
         <span className={styles.version}>v0.1.0 — Local-first v1</span>
       </div>
     </aside>

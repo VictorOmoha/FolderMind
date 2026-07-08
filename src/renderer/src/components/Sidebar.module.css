@@ -1,63 +1,67 @@
 .sidebar {
-  width: 260px;
-  min-width: 260px;
-  background: rgba(15, 15, 15, 0.4);
-  backdrop-filter: blur(20px);
+  width: 250px;
+  min-width: 250px;
+  background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 24px 16px;
-  gap: 20px;
+  padding: 20px 14px;
+  gap: 18px;
 }
 
-.header .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.header .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
-.section { display: flex; flex-direction: column; gap: 4px; }
-.label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; padding: 4px 8px; }
+.section { display: flex; flex-direction: column; gap: 3px; }
+.label {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 600;
+  padding: 4px 8px;
+}
 
 .folderItem {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: 10px;
-  border: none; background: transparent; color: var(--text);
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; background: transparent; color: var(--text-muted);
   cursor: pointer; text-align: left; width: 100%;
-  font-size: 14px; transition: background 0.2s ease, transform 0.1s ease;
+  font-size: 13.5px; transition: background 0.14s ease, color 0.14s ease;
 }
-.folderItem:hover { background: var(--surface2); transform: translateX(2px); }
-.folderItem.active { 
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
-  color: white; 
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+.folderItem:hover { background: var(--surface2); color: var(--text); }
+.folderItem.active {
+  background: var(--surface3);
+  color: var(--text);
+  border-color: var(--border);
 }
 .folderName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 
 .footer { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
 
 .activeFolder, .emptyHint {
-  padding: 14px;
+  padding: 13px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius);
+  background: var(--surface2);
 }
-
-.activeFolder {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
+.activeFolder { display: flex; flex-direction: column; gap: 4px; }
 .activeName { font-size: 13px; font-weight: 600; }
+.activePath { font-size: 11px; color: var(--text-dim); word-break: break-all; }
 
-.activePath {
-  font-size: 11px;
+.emptyHint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+
+.feedbackBtn {
+  background: transparent;
+  border: 1px solid var(--border);
   color: var(--text-muted);
-  word-break: break-all;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
+.feedbackBtn:hover { background: var(--surface2); border-color: var(--border-strong); color: var(--text); }
 
-.emptyHint {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.version { font-size: 11px; color: var(--text-muted); padding: 4px 8px; }
+.version { font-size: 10.5px; color: var(--text-dim); padding: 4px 8px; }

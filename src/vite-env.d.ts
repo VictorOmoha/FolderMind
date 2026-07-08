@@ -94,6 +94,8 @@ export interface TaskRunTrace {
   detail: string
   ts: number
   diff?: string
+  file?: string
+  command?: string
 }
 
 export interface TaskRunPlanStep {

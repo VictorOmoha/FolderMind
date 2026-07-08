@@ -7,6 +7,13 @@ export async function runBrowserSession(
 ): Promise<string> {
   let browser: Browser | null = null
   try {
+    // Only allow http(s). Block file://, chrome://, and other schemes that would turn
+    // this into a local-file-read / SSRF primitive driven by model-supplied URLs.
+    let parsed: URL
+    try { parsed = new URL(url) } catch { return `Browser session refused: invalid URL "${url}".` }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return `Browser session refused: only http(s) URLs are allowed (got "${parsed.protocol}").`
+    }
     browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -34,7 +41,7 @@ export async function runBrowserSession(
       return typeof result === 'string' ? result : JSON.stringify(result, null, 2)
     }
   } catch (err: any) {
-    return `Browser session failed: \${err.message}`
+    return `Browser session failed: ${err.message}`
   } finally {
     if (browser) await browser.close()
   }

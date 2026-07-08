@@ -8,7 +8,11 @@
     "dev": "electron-vite dev -- --no-sandbox",
     "build": "electron-vite build && electron-builder",
     "preview": "electron-vite preview",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "check": "npm run typecheck && npm run lint"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

@@ -1,7 +1,8 @@
 import { OpenAI } from 'openai'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { getOpenAI } from './agent'
+import { getOpenAI, archetypeGuidance } from './agent'
+import { runBrowserSession } from './browserTools'
 
 const execAsync = promisify(exec)
 
@@ -14,7 +15,7 @@ export async function runExecutorAgent(
 ): Promise<{ finalResponse: string, toolCallsCount: number }> {
   const ai = getOpenAI()
   const { folderPath, onToken, onToolCall, onToolResult, onActivity, onApprovalRequest, onTrace } = context
-  const { needsApproval, truncate, COMMAND_LIMIT } = helpers
+  const { isAutoApproved, truncate, COMMAND_LIMIT } = helpers
 
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     {
@@ -46,7 +47,9 @@ export async function runExecutorAgent(
 Folder Path: ${folderPath}
 Your SOLE job is to run terminal commands to verify code, install dependencies, or execute scripts based on the Architect's blueprint.
 You CANNOT read or write files directly.
-Only run commands that are strictly necessary.
+Only run commands that are strictly necessary. Prefer the project's own scripts (test, build, lint, typecheck) to verify changes.
+
+${archetypeGuidance(context.profile?.archetype)}
 
 Architect's Blueprint and Context:
 ${plannerContext}`
@@ -97,22 +100,21 @@ ${plannerContext}`
             onTrace?.({ tool: name, detail: `Prepared command: ${command}`, ts: Date.now(), command })
             if (!command) throw new Error('Command is required')
 
-            if (needsApproval(command)) {
+            // Default-deny: only a known-safe allow-list runs without asking. Everything
+            // else (including anything a deny-list might miss) requires explicit approval.
+            let approved = isAutoApproved(command)
+            if (!approved) {
               onActivity?.({ kind: 'approval', message: `Approval requested for command: ${command}`, ts: Date.now() })
-              const approved = await onApprovalRequest?.({
-                id: `approval-${Date.now()}`,
+              approved = (await onApprovalRequest?.({
+                id: `approval-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 type: 'command',
                 title: 'Command approval required',
-                description: 'The agent wants to run a potentially dangerous command.',
+                description: 'The agent wants to run a command that is not on the auto-approved safe list. Review it before allowing.',
                 command,
-              })
-              if (!approved) {
-                result = 'Command blocked: user did not approve execution.'
-              } else {
-                const shell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
-                const { stdout, stderr } = await execAsync(command, { cwd: folderPath, shell, timeout: 30000 })
-                result = truncate((stdout + '\n' + stderr).trim() || 'Command executed successfully.', COMMAND_LIMIT)
-              }
+              })) ?? false
+            }
+            if (!approved) {
+              result = 'Command blocked: user did not approve execution.'
             } else {
               const shell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'
               const { stdout, stderr } = await execAsync(command, { cwd: folderPath, shell, timeout: 30000 })
@@ -120,7 +122,6 @@ ${plannerContext}`
             }
           }
           else if (name === 'verifyInBrowser') {
-            const { runBrowserSession } = require('./browserTools')
             onTrace?.({ tool: name, detail: `Loading ${String(args.url || '')}`, ts: Date.now() })
             result = await runBrowserSession(String(args.url || ''), String(args.script || ''))
           }

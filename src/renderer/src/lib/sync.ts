@@ -28,7 +28,7 @@ function syncDocRef(uid: string, folderId: string, type: 'tasks' | 'chat') {
 interface CloudTask {
   id: string
   text: string
-  status: 'open' | 'done'
+  status: 'suggested' | 'open' | 'done'
   lastRunSummary?: string
   lastRunStatus?: string
   runCount: number

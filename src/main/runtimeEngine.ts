@@ -1,12 +1,12 @@
 import { exec } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
-import { basename, join, relative } from 'path'
+import { join, relative } from 'path'
 import { promisify } from 'util'
 import { hasApiKey, runAutonomousReview } from './agent'
 import { AgentFollowUpKind, getWorkflowDefinition, getWorkflowFollowUps, getWorkflowSteps } from './runtimeDefinitions'
 import { findCommandRule } from './runtimePolicy'
 import { firstStructuredLine, inferVerificationCommandFromResult } from './runtimeWorkflow'
-import { AgentJob, JOB_TIMEOUT_MS, RuntimeDeps } from './runtimeTypes'
+import { AgentJob, JOB_TIMEOUT_MS, RuntimeDeps, RuntimePolicy } from './runtimeTypes'
 import { appendRuntimeEvent, readJobs, saveAndEmit } from './runtimeState'
 
 const execAsync = promisify(exec)
@@ -268,13 +268,15 @@ export function queueVerificationFollowUpFromAnalysis(folderPath: string, comple
   const policy = deps.readAgentConfig(folderPath).guardrails?.runtime
   if (!policy?.allowBackgroundAgent || !policy.autoQueueTestRuns) return
 
-  const normalizedPolicy = {
+  const normalizedPolicy: RuntimePolicy = {
     ...policy,
     verificationCommandRules: policy.verificationCommandRules || [],
     allowedVerificationCommands: policy.allowedVerificationCommands || [],
     maxJobAttempts: policy.maxJobAttempts || 3,
     retryCooldownMinutes: policy.retryCooldownMinutes || 5,
     maxSuggestedTasksPerJob: policy.maxSuggestedTasksPerJob || 2,
+    allowBackgroundAgent: true,
+    autoQueueTestRuns: true,
     autoRunFileReview: policy.autoRunFileReview !== false,
     autoRunDiffSummary: policy.autoRunDiffSummary === true,
     autoCreateSuggestedTasks: policy.autoCreateSuggestedTasks !== false,

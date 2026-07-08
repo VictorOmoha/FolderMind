@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   doc,
-  getDoc,
   setDoc,
   onSnapshot,
   serverTimestamp,
   increment,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { db, firebaseConfigured } from '../lib/firebase'
 import type { User } from 'firebase/auth'
 
 export type PlanTier = 'free' | 'pro' | 'business'
@@ -33,7 +32,7 @@ export function useUsage(user: User | null) {
   })
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     const ref = doc(db, 'users', user.uid, 'meta', 'usage')
     const unsub = onSnapshot(ref, snap => {
       if (snap.exists()) {
@@ -59,13 +58,13 @@ export function useUsage(user: User | null) {
   const canSendAI = usage.planTier !== 'free' || usage.aiCallsThisMonth < FREE_AI_LIMIT
 
   const trackFolderCreated = useCallback(async () => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     const ref = doc(db, 'users', user.uid, 'meta', 'usage')
     await setDoc(ref, { folderCount: increment(1) }, { merge: true })
   }, [user])
 
   const trackAICall = useCallback(async () => {
-    if (!user) return
+    if (!user || !firebaseConfigured) return
     const ref = doc(db, 'users', user.uid, 'meta', 'usage')
     await setDoc(ref, { aiCallsThisMonth: increment(1) }, { merge: true })
   }, [user])

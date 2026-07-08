@@ -4,8 +4,8 @@ import styles from './SettingsModal.module.css'
 
 interface Props {
   open: boolean
-  folderName: string
-  folderPath: string
+  folderName?: string
+  folderPath?: string
   agentConfig: AgentConfig | null
   onClose: () => void
   onSaveApiKey: (key: string) => void
@@ -62,10 +62,14 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
         <div className={styles.grid}>
           <div className={styles.section}>
             <h3>Workspace</h3>
-            <div className={styles.meta}>
-              <div><span className={styles.k}>Folder Name</span><span className={styles.v}>{folderName}</span></div>
-              <div><span className={styles.k}>Local Path</span><span className={`${styles.v} ${styles.mono}`}>{folderPath}</span></div>
-            </div>
+            {folderName ? (
+              <div className={styles.meta}>
+                <div><span className={styles.k}>Folder Name</span><span className={styles.v}>{folderName}</span></div>
+                <div><span className={styles.k}>Local Path</span><span className={`${styles.v} ${styles.mono}`}>{folderPath}</span></div>
+              </div>
+            ) : (
+              <p className="muted">No folder open yet. You can add your API key now, then open a folder to configure its agent.</p>
+            )}
             <div className={styles.divider} />
             <span className={styles.label}>OpenAI API Key (Session-only)</span>
             <input
@@ -75,9 +79,10 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
             />
-            <p className={styles.help}>This key is stored only in memory for the current session. For permanent usage, add VITE_OPENAI_API_KEY to your project's .env file.</p>
+            <p className={styles.help}>This key is stored only in memory for the current session. For permanent usage, add OPENAI_API_KEY to your project's .env file (do not use the VITE_ prefix — it would bundle the key into the app).</p>
           </div>
 
+          {agentConfig && <>
           <div className={styles.section}>
             <h3>Agent Profile</h3>
             <div className={styles.meta}>
@@ -138,6 +143,7 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
               </div>
             </div>
           </div>
+          </>}
         </div>
 
         <div className={styles.actions}>
