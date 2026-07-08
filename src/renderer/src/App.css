@@ -22,7 +22,7 @@
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.55);
+  box-shadow: var(--shadow-pop);
   animation: modal-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -36,8 +36,8 @@
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #444; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 /* Utility classes that are truly global */
 .muted { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
@@ -46,12 +46,48 @@
 .text-yellow { color: var(--yellow); }
 .text-red { color: var(--red); }
 
-/* Chat empty state + quick-prompt chips */
-.chat-empty { padding: 28px 28px 8px; display: flex; flex-direction: column; gap: 8px; }
+/* Chat empty state: centered greeting + quick-prompt chips */
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  overflow-y: auto;
+}
+.chat-empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  max-width: 520px;
+}
+.chat-empty-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 6px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.chat-empty-badge svg { flex: none; color: var(--accent); }
+.chat-empty h2 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 .chat-empty p { font-size: 14px; line-height: 1.6; color: var(--text-muted); }
-.chat-empty p strong { color: var(--text); }
 .onboarding-note { font-size: 13px; color: var(--text-dim); }
-.quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.quick-prompts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
 .quick-prompt-chip {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -83,7 +119,7 @@
   align-items: center;
   gap: 16px;
 }
-.splash-logo { font-size: 64px; }
+.splash-logo { display: flex; }
 .splash-label { font-size: 18px; font-weight: 600; color: var(--text-muted); }
 .splash-spinner {
   width: 24px;

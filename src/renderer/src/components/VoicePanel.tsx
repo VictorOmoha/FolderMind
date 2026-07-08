@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { MicIcon, StopIcon, SpinnerIcon, SpeakerIcon, SpeakerOffIcon } from './Icons'
 import styles from './VoicePanel.module.css'
 
 interface Props {
@@ -23,11 +25,11 @@ const STATE_LABEL: Record<VoiceState, string> = {
   speaking: 'Speaking…',
 }
 
-const STATE_ICON: Record<VoiceState, string> = {
-  idle: '🎙️',
-  listening: '⏹',
-  transcribing: '⏳',
-  speaking: '🔊',
+const STATE_ICON: Record<VoiceState, ReactNode> = {
+  idle: <MicIcon size={18} />,
+  listening: <StopIcon size={16} />,
+  transcribing: <SpinnerIcon size={16} />,
+  speaking: <SpeakerIcon size={17} />,
 }
 
 export function VoicePanel({
@@ -77,7 +79,7 @@ export function VoicePanel({
           onClick={onToggleReplies}
           disabled={transcribing}
         >
-          {voiceRepliesEnabled ? '🔊 Replies' : '🔇 Replies'}
+          {voiceRepliesEnabled ? <SpeakerIcon size={13} /> : <SpeakerOffIcon size={13} />} Replies
         </button>
         <button
           className={`${styles.togglePill} ${voiceAutoMode ? styles.on : ''}`}

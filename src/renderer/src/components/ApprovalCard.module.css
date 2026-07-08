@@ -1,41 +1,43 @@
 .card {
-  border: 1px solid var(--accent);
-  background: rgba(102, 114, 236, 0.05);
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.card.command { border-color: var(--yellow); background: rgba(251, 188, 4, 0.05); }
+.card.command { border-color: var(--yellow-line); background: var(--yellow-soft); }
 
 .headerRow { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 
 .typeBadge {
-  font-size: 10px; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; font-weight: 700;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 2px 8px; border-radius: var(--radius-pill); border: 1px solid;
 }
-.typeBadge.command { background: #3a2f0d; color: #fbe7a2; }
-.typeBadge.fileChange { background: #1a1a2e; color: #a5b4fc; }
+.typeBadge.command { background: var(--yellow-soft); border-color: var(--yellow-line); color: var(--yellow); }
+.typeBadge.fileChange { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 
 .summaryRow { display: flex; flex-direction: column; gap: 4px; }
 .summaryRow.compact { flex-direction: row; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .summaryLabel { font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
 .summaryValue { font-size: 13px; }
-.summaryValue.mono { font-family: ui-monospace, SFMono-Regular, monospace; }
+.summaryValue.mono { font-family: var(--font-mono); }
 
 .commandPre {
-  background: #0d0d0d; border: 1px solid var(--border); border-radius: 8px;
-  padding: 8px 10px; font-size: 12px; color: #d1d1d1; white-space: pre-wrap; word-break: break-all;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 10px; font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);
+  white-space: pre-wrap; word-break: break-all;
 }
 
 .diffWrap { display: flex; flex-direction: column; gap: 4px; }
 .diffView {
-  background: #0d0d0d; border: 1px solid var(--border); border-radius: 8px;
-  max-height: 200px; overflow: auto; font-family: ui-monospace, SFMono-Regular, monospace;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  max-height: 200px; overflow: auto; font-family: var(--font-mono);
   font-size: 11px;
 }
 .diffLine { padding: 2px 8px; white-space: pre; min-height: 1.4em; }
-.diffLine.add { background: rgba(34, 197, 94, 0.15); color: #86efac; }
-.diffLine.rem { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
-.diffLine.hunk { background: rgba(138, 180, 248, 0.1); color: #8ab4f8; opacity: 0.8; }
+.diffLine.add { background: var(--green-soft); color: var(--green); }
+.diffLine.rem { background: var(--red-soft); color: var(--red); }
+.diffLine.hunk { background: var(--accent-soft); color: var(--accent); opacity: 0.85; }
 
 .actions { display: flex; gap: 8px; margin-top: 4px; }
 .actions button { flex: 1; }

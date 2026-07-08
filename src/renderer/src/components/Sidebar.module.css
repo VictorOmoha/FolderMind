@@ -9,7 +9,8 @@
   gap: 18px;
 }
 
-.header .logo { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.header .logo { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.folderItem svg { flex: none; opacity: 0.75; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
 .section { display: flex; flex-direction: column; gap: 3px; }
 .label {
@@ -59,7 +60,10 @@
   padding: 9px 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
 .feedbackBtn:hover { background: var(--surface2); border-color: var(--border-strong); color: var(--text); }

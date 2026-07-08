@@ -7,6 +7,7 @@ import { AuthScreen } from './components/AuthScreen'
 import { UpgradeModal } from './components/UpgradeModal'
 import { GitPanel } from './components/GitPanel'
 import { AgentInbox } from './components/AgentInbox'
+import { FolderMark } from './components/Icons'
 import { useFolder } from './hooks/useFolder'
 import { firebaseConfigured } from './lib/firebase'
 import { useAuth } from './hooks/useAuth'
@@ -182,7 +183,7 @@ export default function App() {
     return (
       <div className="splash">
         <div className="splash-inner">
-          <div className="splash-logo">🗂️</div>
+          <div className="splash-logo"><FolderMark size={56} /></div>
           <p className="splash-label">FolderMind</p>
           <div className="splash-spinner" />
         </div>
@@ -236,7 +237,8 @@ export default function App() {
         {!activeFolder ? (
           <div className={styles.welcome}>
             <div className={styles.welcomeInner}>
-              <h1>🗂️ FolderMind</h1>
+              <FolderMark size={44} className={styles.welcomeMark} />
+              <h1>FolderMind</h1>
               <p className={styles.tagline}>Every folder, a co-worker.</p>
               <p className={styles.desc}>
                 Drop files into a folder. Ask questions. Get answers.<br />

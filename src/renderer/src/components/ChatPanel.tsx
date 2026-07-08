@@ -6,6 +6,7 @@ import { ChatMessageList } from './ChatMessageList'
 import { TaskSidebar } from './TaskSidebar'
 import { ApprovalCard } from './ApprovalCard'
 import { VoicePanel } from './VoicePanel'
+import { ArrowUpIcon } from './Icons'
 import { useVoice } from '../hooks/useVoice'
 import { useChatIPC } from '../hooks/useChatIPC'
 import styles from './ChatPanel.module.css'
@@ -207,23 +208,40 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
 
         {!canSendAI && (
           <div className={styles.usageLimitBanner}>
-            🚫 You've used all your AI calls this month.{' '}
+            You've used all your AI calls this month.{' '}
             <button className={styles.usageLimitUpgradeBtn} onClick={onUsageLimitHit}>Upgrade to Pro →</button>
           </div>
         )}
 
-        <div className={styles.inputRow}>
-          <textarea
-            className={styles.input}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }}
-            placeholder={hasApiKey ? 'Ask FolderMind anything… or press Space to talk' : 'Add your OpenAI API key in Settings to start chatting…'}
-            rows={3}
-            disabled={!hasApiKey || loading}
-          />
-          <button className={styles.btnSend} onClick={() => void handleSend()} disabled={loading || !input.trim() || !hasApiKey || !canSendAI}>Send</button>
-          <button className="btn-secondary" onClick={() => void handleClearChat()} disabled={loading || messages.length === 0}>Clear</button>
+        <div className={styles.composerWrap}>
+          <div className={styles.composer}>
+            <textarea
+              className={styles.input}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }}
+              placeholder={hasApiKey ? 'Ask FolderMind anything… or press Space to talk' : 'Add your OpenAI API key in Settings to start chatting…'}
+              rows={2}
+              disabled={!hasApiKey || loading}
+            />
+            <div className={styles.composerRow}>
+              <div>
+                {messages.length > 0 && (
+                  <button className="btn-ghost" onClick={() => void handleClearChat()} disabled={loading}>Clear chat</button>
+                )}
+              </div>
+              <div className={styles.composerActions}>
+                <span className={styles.composerHint}>Enter to send · Shift+Enter for a new line</span>
+                <button
+                  className={styles.btnSend}
+                  onClick={() => void handleSend()}
+                  disabled={loading || !input.trim() || !hasApiKey || !canSendAI}
+                  aria-label="Send message"
+                  title="Send"
+                ><ArrowUpIcon size={15} /></button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

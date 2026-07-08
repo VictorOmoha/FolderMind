@@ -6,7 +6,7 @@
   gap: 12px;
   background: var(--surface2);
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .micBtn {
@@ -15,7 +15,7 @@
   height: 40px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: #111;
+  background: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,8 +23,8 @@
   font-size: 18px;
   transition: all 0.2s;
 }
-.micBtn:hover:not(:disabled) { border-color: #666; background: #1a1a1a; }
-.micBtn.listening { border-color: var(--red); color: var(--red); box-shadow: 0 0 12px rgba(239, 68, 68, 0.3); }
+.micBtn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface3); }
+.micBtn.listening { border-color: var(--red); color: var(--red);  }
 .micBtn.transcribing { border-color: var(--yellow); }
 .micBtn.speaking { border-color: var(--green); animation: pulse-green 1.5s infinite; }
 
@@ -42,8 +42,8 @@
   100% { transform: scale(1.4); opacity: 0; }
 }
 @keyframes pulse-green {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 214, 163, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(127, 214, 163, 0); }
 }
 
 .stateLabel { font-size: 13px; font-weight: 500; }
@@ -54,28 +54,32 @@
 .toggles { display: flex; gap: 8px; }
 .togglePill {
   flex: 1;
-  background: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text-muted);
   padding: 6px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   cursor: pointer;
   transition: all 0.15s;
 }
-.togglePill.on { border-color: var(--accent); color: var(--text); background: rgba(102, 114, 236, 0.1); }
+.togglePill.on { border-color: var(--accent-line); color: var(--text); background: var(--accent-soft); }
 .togglePill:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .transcript {
-  background: #0d0d0d;
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .transcriptLabel { font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
-.transcriptText { font-size: 13px; font-style: italic; color: #d1d1d1; }
+.transcriptText { font-size: 13px; font-style: italic; color: var(--text-muted); }
 
-.error { font-size: 12px; color: var(--red); background: rgba(239, 68, 68, 0.1); padding: 6px 10px; border-radius: 8px; }
+.error { font-size: 12px; color: var(--red); background: var(--red-soft); padding: 6px 10px; border-radius: var(--radius-sm); }

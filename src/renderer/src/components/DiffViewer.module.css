@@ -16,27 +16,27 @@
   cursor: pointer;
   text-align: left;
 }
-.header:hover { background: #2a2a2a; }
+.header:hover { background: var(--surface3); }
 
 .filepath {
   flex: 1;
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, monospace;
-  color: #ccc;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .stats { display: flex; gap: 8px; font-size: 11px; font-weight: 600; }
-.statAdd { color: #4ade80; }
-.statRemove { color: #f87171; }
+.statAdd { color: var(--green); }
+.statRemove { color: var(--red); }
 .statNeutral { color: var(--text-muted); font-weight: 400; }
 
 .toggleIcon { font-size: 10px; color: var(--text-muted); }
 
 .body {
-  background: #0d0d0d;
+  background: var(--bg);
   max-height: 400px;
   overflow: auto;
   padding: 4px 0;
@@ -52,6 +52,6 @@
   line-height: 1.5;
   min-height: 1.5em;
 }
-.diffLine.add { background: rgba(34, 197, 94, 0.15); color: #86efac; }
-.diffLine.remove { background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
-.diffLine.hunk { background: rgba(138, 180, 248, 0.1); color: #8ab4f8; opacity: 0.8; }
+.diffLine.add { background: var(--green-soft); color: var(--green); }
+.diffLine.remove { background: var(--red-soft); color: var(--red); }
+.diffLine.hunk { background: var(--accent-soft); color: var(--accent); opacity: 0.8; }

@@ -10,7 +10,7 @@
   cursor: pointer;
   user-select: none;
 }
-.header:hover { background: #111; }
+.header:hover { background: var(--bg); }
 .title {
   display: flex;
   align-items: center;
@@ -38,10 +38,10 @@
   border-radius: 999px;
   border: 1px solid;
 }
-.countPill.changed { background: #2e1f00; border-color: #6b4800; color: #fbbf24; }
-.countPill.staged  { background: #0f2d1a; border-color: #1a5c34; color: #4ade80; }
-.countPill.untracked { background: #1a1a2e; border-color: #3b3b6b; color: #a5b4fc; }
-.countPill.clean { background: #101a10; border-color: #1a3a1a; color: #86efac; }
+.countPill.changed { background: #2e1f00; border-color: #6b4800; color: var(--yellow); }
+.countPill.staged  { background: var(--green-soft); border-color: #1a5c34; color: var(--green); }
+.countPill.untracked { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.countPill.clean { background: #101a10; border-color: #1a3a1a; color: var(--green); }
 
 .body {
   padding: 0 24px 14px;
@@ -73,7 +73,7 @@
   border-radius: 6px;
   cursor: pointer;
 }
-.actionBtn:hover { color: var(--text); border-color: #666; }
+.actionBtn:hover { color: var(--text); border-color: var(--border-strong); }
 
 .fileRow {
   display: flex;
@@ -85,7 +85,7 @@
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
-  background: #111;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 12px;
@@ -94,7 +94,7 @@
   flex: 1;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 11px;
-  color: #c9d1d9;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -110,12 +110,12 @@
   cursor: pointer;
   font-family: inherit;
 }
-.fileBtn.stage  { border-color: #1a5c34; color: #4ade80; }
-.fileBtn.stage:hover { background: #0f2d1a; }
-.fileBtn.unstage { border-color: #7f1d1d; color: #f87171; }
-.fileBtn.unstage:hover { background: #2e1414; }
-.fileBtn.diff { border-color: #3b3b6b; color: #a5b4fc; }
-.fileBtn.diff:hover { background: #1a1a2e; }
+.fileBtn.stage  { border-color: #1a5c34; color: var(--green); }
+.fileBtn.stage:hover { background: var(--green-soft); }
+.fileBtn.unstage { border-color: var(--red-line); color: var(--red); }
+.fileBtn.unstage:hover { background: var(--red-soft); }
+.fileBtn.diff { border-color: var(--accent-line); color: var(--accent); }
+.fileBtn.diff:hover { background: var(--accent-soft); }
 .fileBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .commitArea {
@@ -127,7 +127,7 @@
 }
 .commitInput {
   width: 100%;
-  background: #111;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -155,11 +155,11 @@
   font-family: inherit;
   transition: background 0.12s;
 }
-.commitBtn:hover { background: #2a2a3a; }
+.commitBtn:hover { background: var(--surface3); }
 .commitBtn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent-fg);
 }
 .commitBtn.primary:hover { background: var(--accent-hover); }
 .commitBtn:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -184,5 +184,5 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
-.opResult.ok    { background: #0f2d1a; border: 1px solid #1a5c34; color: #86efac; }
-.opResult.error { background: #2e1414; border: 1px solid #7f1d1d; color: #fecaca; }
+.opResult.ok    { background: var(--green-soft); border: 1px solid #1a5c34; color: var(--green); }
+.opResult.error { background: var(--red-soft); border: 1px solid var(--red-line); color: var(--red); }

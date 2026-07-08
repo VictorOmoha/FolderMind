@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FolderMark } from './Icons'
 import styles from './AuthScreen.module.css'
 
 interface Props {
@@ -28,7 +29,7 @@ export function AuthScreen({ onLogin, onSignup, onGoogle, error }: Props) {
   return (
     <div className={styles.screen}>
       <div className={styles.card}>
-        <div className={styles.logo}>🗂️</div>
+        <div className={styles.logo}><FolderMark size={44} /></div>
         <h1 className={styles.title}>FolderMind</h1>
         <p className={styles.tagline}>Autonomous Folder Agents</p>
 

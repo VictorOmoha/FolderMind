@@ -7,9 +7,11 @@
   --border: #20222b;          /* hairline */
   --border-strong: #2a2d38;
 
-  --accent: #6672ec;          /* single flat indigo — used sparingly */
-  --accent-hover: #5661e0;
-  --accent-soft: #1a1c2b;     /* faint accent-tinted surface */
+  /* Signature copper — manila-folder warmth, used sparingly */
+  --accent: #d08954;
+  --accent-hover: #dd9a66;
+  --accent-fg: #1c1208;       /* text/icons on accent fills */
+  --accent-soft: #231a13;     /* faint accent-tinted surface */
 
   --text: #e6e7ea;
   --text-muted: #8b8d98;
@@ -19,13 +21,29 @@
   --yellow: #e0b24b;
   --red: #f0787c;
 
+  /* soft tinted fills + hairlines for status UI — always use these pairs together */
+  --green-soft: rgba(127, 214, 163, 0.08);
+  --green-line: rgba(127, 214, 163, 0.22);
+  --yellow-soft: rgba(224, 178, 75, 0.08);
+  --yellow-line: rgba(224, 178, 75, 0.22);
+  --red-soft: rgba(240, 120, 124, 0.08);
+  --red-line: rgba(240, 120, 124, 0.25);
+  --accent-line: rgba(208, 137, 84, 0.35);
+
+  --focus-ring: 0 0 0 3px rgba(208, 137, 84, 0.22);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-pop: 0 24px 60px rgba(0, 0, 0, 0.55);
+
   --radius-sm: 7px;
   --radius: 9px;
   --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
 
   --font-body: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* display face for hero headlines only (greeting, welcome) — not section headings */
+  --font-display: ui-serif, 'New York', Georgia, 'Times New Roman', serif;
 
   font-family: var(--font-body);
   color-scheme: dark;
@@ -47,7 +65,7 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 /* ── Buttons: flat, tight, no glow ────────────────────────────────────────── */
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-fg);
   border: 1px solid var(--accent);
   padding: 9px 15px;
   border-radius: var(--radius-sm);
@@ -73,6 +91,21 @@ h1, h2, h3 { letter-spacing: -0.01em; }
 }
 .btn-secondary:hover { background: var(--surface3); border-color: var(--border-strong); }
 .btn-secondary.large { padding: 12px 22px; font-size: 14px; }
+
+/* Ghost: borderless quiet action (toolbar / inline) */
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.btn-ghost:hover:not(:disabled) { background: var(--surface3); color: var(--text); }
+.btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── Card ─────────────────────────────────────────────────────────────────── */
 .agent-card {

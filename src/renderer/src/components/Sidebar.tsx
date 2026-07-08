@@ -1,4 +1,5 @@
 import type { SmartFolder } from '../hooks/useFolder'
+import { FolderMark, FolderIcon, ChatBubbleIcon } from './Icons'
 import styles from './Sidebar.module.css'
 
 interface Props {
@@ -15,7 +16,7 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <span className={styles.logo}>🗂️ FolderMind</span>
+        <span className={styles.logo}><FolderMark size={19} /> FolderMind</span>
       </div>
 
       <div className={styles.actions}>
@@ -34,7 +35,7 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
               onClick={() => onSelectFolder(folder)}
               title={folder.path}
             >
-              <span className="folder-icon">📁</span>
+              <FolderIcon size={15} />
               <span className={styles.folderName}>{folder.name}</span>
             </button>
           ))}
@@ -53,7 +54,7 @@ export function Sidebar({ activeFolder, recentFolders, onCreateFolder, onOpenFol
             Open a folder to activate memory, briefing, tasks, and agent tools.
           </div>
         )}
-        <button className={styles.feedbackBtn} onClick={onSendFeedback}>💬 Send feedback</button>
+        <button className={styles.feedbackBtn} onClick={onSendFeedback}><ChatBubbleIcon size={13} /> Send feedback</button>
         <span className={styles.version}>v0.1.0 — Local-first v1</span>
       </div>
     </aside>
