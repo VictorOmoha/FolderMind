@@ -252,7 +252,7 @@ export function TaskSidebar({
   onRunTask,
   onSelectJob,
   jobs,
-  hasApiKey,
+  aiReady,
 }: TaskSidebarProps) {
   const selectedTask = tasks.find((t) => t.id === selectedTaskId) || null
   const originatingJob = selectedTask?.suggestedByJobId ? jobs.find((job) => job.id === selectedTask.suggestedByJobId) || null : null
@@ -334,7 +334,7 @@ export function TaskSidebar({
                   <button
                     className={styles.btnGhost}
                     onClick={(e) => { e.stopPropagation(); void onRunTask(task) }}
-                    disabled={!hasApiKey || task.status === 'suggested'}
+                    disabled={!aiReady || task.status === 'suggested'}
                   >Run</button>
                   <button
                     className={`${styles.btnGhost} ${styles.danger}`}

@@ -18,7 +18,9 @@ interface Props {
   tasks: TaskItem[]
   jobs: AgentJob[]
   selectedTaskId: string | null
-  hasApiKey: boolean
+  aiReady: boolean
+  /** Voice transcription currently requires a personal OpenAI key (BYO mode). */
+  voiceReady?: boolean
   archetype?: string
   canSendAI?: boolean
   onRunTask: (task: TaskItem) => Promise<string | null>
@@ -31,7 +33,7 @@ interface Props {
   onUsageLimitHit?: () => void
 }
 
-export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selectedTaskId, hasApiKey, archetype, canSendAI = true, onRunTask, onAddTask, onToggleTask, onDeleteTask, onSelectTask, onSelectJob, onAfterAICall, onUsageLimitHit }: Props) {
+export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selectedTaskId, aiReady, voiceReady = false, archetype, canSendAI = true, onRunTask, onAddTask, onToggleTask, onDeleteTask, onSelectTask, onSelectJob, onAfterAICall, onUsageLimitHit }: Props) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [taskInput, setTaskInput] = useState('')
@@ -146,7 +148,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
   }
 
   const handleRunTask = async (task: TaskItem) => {
-    if (loading || !hasApiKey) return
+    if (loading || !aiReady) return
     if (!canSendAI) { onUsageLimitHit?.(); return }
     onSelectTask(task.id)
     setMessages(prev => [...prev, { role: 'user', content: `Run task: ${task.text}` }])
@@ -168,7 +170,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
 
   const handleSend = async (overridePrompt?: string) => {
     const prompt = (overridePrompt ?? input).trim()
-    if (!prompt || loading || !hasApiKey) return
+    if (!prompt || loading || !aiReady) return
     if (!canSendAI) { onUsageLimitHit?.(); return }
 
     const history = messages
@@ -203,7 +205,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
     <div className={styles.shell}>
       <div className={styles.panel}>
         {showEmptyState
-          ? <ChatEmptyState folderName={folderName} hasApiKey={hasApiKey} archetype={archetype} onPrompt={setInput} />
+          ? <ChatEmptyState folderName={folderName} aiReady={aiReady} archetype={archetype} onPrompt={setInput} />
           : <ChatMessageList messages={messages} streamingContent={streamingContent} currentTool={currentTool} loading={loading} bottomRef={bottomRef} />}
 
         {!canSendAI && (
@@ -220,9 +222,9 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() } }}
-              placeholder={hasApiKey ? 'Ask FolderMind anything… or press Space to talk' : 'Add your OpenAI API key in Settings to start chatting…'}
+              placeholder={aiReady ? (voiceReady ? 'Ask FolderMind anything… or press Space to talk' : 'Ask FolderMind anything…') : 'Connect AI in Settings to start chatting…'}
               rows={2}
-              disabled={!hasApiKey || loading}
+              disabled={!aiReady || loading}
             />
             <div className={styles.composerRow}>
               <div>
@@ -235,7 +237,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
                 <button
                   className={styles.btnSend}
                   onClick={() => void handleSend()}
-                  disabled={loading || !input.trim() || !hasApiKey || !canSendAI}
+                  disabled={loading || !input.trim() || !aiReady || !canSendAI}
                   aria-label="Send message"
                   title="Send"
                 ><ArrowUpIcon size={15} /></button>
@@ -265,7 +267,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
           onDeleteTask={onDeleteTask}
           onRunTask={handleRunTask}
           onSelectJob={onSelectJob}
-          hasApiKey={hasApiKey}
+          aiReady={aiReady}
         />
 
         <VoicePanel
@@ -276,7 +278,7 @@ export function ChatPanel({ folderPath, folderName, memory, tasks, jobs, selecte
           voiceAutoMode={voiceAutoMode}
           lastTranscript={lastTranscript}
           error={voiceError}
-          hasApiKey={hasApiKey}
+          voiceReady={voiceReady}
           onToggle={() => void toggleVoice()}
           onToggleReplies={() => setVoiceRepliesEnabled(prev => !prev)}
           onToggleAutoMode={() => setVoiceAutoMode(prev => !prev)}

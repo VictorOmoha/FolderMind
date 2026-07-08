@@ -55,7 +55,7 @@ export interface TaskSidebarProps {
   onDeleteTask: (taskId: string) => void
   onRunTask: (task: TaskItem) => Promise<void>
   onSelectJob?: (jobId: string) => void
-  hasApiKey: boolean
+  aiReady: boolean
 }
 
 export interface ChatMessageListProps {

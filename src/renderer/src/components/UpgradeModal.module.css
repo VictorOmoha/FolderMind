@@ -27,7 +27,7 @@
 }
 
 .icon {
-  font-size: 48px;
+  display: flex;
   margin-bottom: 16px;
 }
 
@@ -40,7 +40,25 @@
 .message {
   font-size: 14px;
   color: var(--text-muted);
-  margin-bottom: 32px;
+  margin-bottom: 12px;
+}
+
+.honestyNote {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--yellow);
+  background: var(--yellow-soft);
+  border: 1px solid var(--yellow-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  max-width: 560px;
+  margin-bottom: 28px;
+}
+
+.joinedNote {
+  font-size: 13px;
+  color: var(--green);
+  margin-bottom: 12px;
 }
 
 .grid {
@@ -161,7 +179,8 @@
   margin-top: auto;
 }
 
-.btnUpgrade:hover {
+.btnUpgrade:disabled { opacity: 0.6; cursor: default; }
+.btnUpgrade:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 

@@ -58,7 +58,7 @@ export default function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [agentConfig, setAgentConfig] = useState<AgentConfig | null>(null)
-  const [hasApiKey, setHasApiKey] = useState(false)
+  const [aiMode, setAiMode] = useState<'byo' | 'hosted' | 'none'>('none')
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null)
   const [upgradeReason, setUpgradeReason] = useState<'folders' | 'ai_calls' | null>(null)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
@@ -71,27 +71,42 @@ export default function App() {
     padding: '6px 12px', borderRadius: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: 500,
   } as const
 
-  useEffect(() => {
-    window.foldermind.getAgentStatus().then((s) => setHasApiKey(s.hasApiKey)).catch(() => setHasApiKey(false))
-  }, [user, usage.planTier])
+  const refreshAiStatus = useCallback(async () => {
+    try {
+      const s = await window.foldermind.getAgentStatus()
+      setAiMode(s.mode ?? (s.hasApiKey ? 'byo' : 'none'))
+    } catch {
+      setAiMode('none')
+    }
+  }, [])
 
   // Hand the main process a fresh Firebase ID token + plan so it can reach the hosted
-  // AI gateway. Refreshed periodically because ID tokens expire (~1h).
+  // AI gateway, then re-read AI status (hosted mode only unlocks once the token lands).
+  // Refreshed periodically because ID tokens expire (~1h).
   useEffect(() => {
     let cancelled = false
     const push = async () => {
-      if (!firebaseConfigured || !user) { window.foldermind.setAuthContext(null, usage.planTier); return }
-      try {
-        const token = await user.getIdToken()
-        if (!cancelled) window.foldermind.setAuthContext(token, usage.planTier)
-      } catch {
-        if (!cancelled) window.foldermind.setAuthContext(null, usage.planTier)
+      if (!firebaseConfigured || !user) {
+        await window.foldermind.setAuthContext(null, usage.planTier)
+      } else {
+        try {
+          const token = await user.getIdToken()
+          if (!cancelled) await window.foldermind.setAuthContext(token, usage.planTier)
+        } catch {
+          if (!cancelled) await window.foldermind.setAuthContext(null, usage.planTier)
+        }
       }
+      if (!cancelled) await refreshAiStatus()
     }
     void push()
     const id = setInterval(push, 45 * 60 * 1000)
     return () => { cancelled = true; clearInterval(id) }
-  }, [user, usage.planTier])
+  }, [user, usage.planTier, refreshAiStatus])
+
+  // BYO calls are free and unlimited by design — only hosted calls draw down the allowance.
+  const aiReady = aiMode !== 'none'
+  const metered = aiMode === 'hosted'
+  const effectiveCanSendAI = metered ? canSendAI : true
 
   useEffect(() => {
     if (!activeFolder) return
@@ -131,14 +146,14 @@ export default function App() {
 
   const handleRunTask = useCallback(async (task: TaskItem) => {
     const response = await runTask(task.id)
-    if (response) await trackAICall()
+    if (response && metered) await trackAICall()
     refreshBriefing?.()
     refreshTasks?.()
     return response
-  }, [runTask, trackAICall, refreshBriefing, refreshTasks])
+  }, [runTask, trackAICall, metered, refreshBriefing, refreshTasks])
 
   const handleAfterAICall = useCallback(async () => {
-    await trackAICall()
+    if (metered) await trackAICall()
     // Sync chat after every AI response
     if (activeFolder) {
       try {
@@ -146,14 +161,14 @@ export default function App() {
         sync.onChatMessages(activeFolder.path, messages)
       } catch { /* non-critical */ }
     }
-  }, [trackAICall, activeFolder, sync])
+  }, [trackAICall, metered, activeFolder, sync])
 
   const handleSaveApiKey = useCallback(async (key: string) => {
     await window.foldermind.setApiKey(key)
-    setHasApiKey(true)
-    setWorkspaceNotice('OpenAI API key saved for this session.')
+    await refreshAiStatus()
+    setWorkspaceNotice('OpenAI API key saved for this session — unlimited AI on your key.')
     refreshJobs?.()
-  }, [refreshJobs])
+  }, [refreshAiStatus, refreshJobs])
 
   const handleSaveProfile = useCallback(async (updates: {
     tone: string; archetype: AgentConfig['archetype']; goals: string[]; constraints: string[]; guardrails: AgentConfig['guardrails']
@@ -209,9 +224,12 @@ export default function App() {
 
   // ── Plan tier helpers ──────────────────────────────────────────
   const isFreeTier = usage.planTier === 'free'
-  const aiCallsLabel = isFreeTier
-    ? `${aiCallsRemaining} AI call${aiCallsRemaining !== 1 ? 's' : ''} left`
-    : 'Unlimited AI'
+  const aiCallsLabel = aiMode === 'byo'
+    ? 'Your key · unlimited'
+    : !isFreeTier
+    ? 'Unlimited AI'
+    : `${aiCallsRemaining} hosted call${aiCallsRemaining !== 1 ? 's' : ''} left`
+  const showCallsMeter = metered && isFreeTier
 
   // Sync status display
   const syncLabel = sync.status === 'syncing' ? '⟳ Syncing' : sync.status === 'synced' ? '☁ Synced' : sync.status === 'error' ? '⚠ Sync error' : ''
@@ -244,12 +262,12 @@ export default function App() {
                 Drop files into a folder. Ask questions. Get answers.<br />
                 Your AI agent can read, write, and execute code within your project.
               </p>
-              {!hasApiKey && (
-                <p className={styles.welcomeNote}>To enable AI: add your own OpenAI key in Settings (free & unlimited), or upgrade to Pro for hosted AI — no key needed.</p>
+              {!aiReady && (
+                <p className={styles.welcomeNote}>AI isn't connected yet — add your OpenAI key in Settings (free & unlimited), or sign in where hosted AI is enabled and it connects automatically.</p>
               )}
               <div className={styles.welcomeSteps}>
                 <div className={styles.welcomeStep}><span>1</span><div><strong>Open a code folder</strong><p>Point FolderMind at a repo — it detects code projects and tunes itself for reading, editing, and verifying.</p></div></div>
-                <div className={styles.welcomeStep}><span>2</span><div><strong>Connect AI</strong><p>Bring your own OpenAI key for free unlimited use, or go Pro for hosted AI with no key to manage.</p></div></div>
+                <div className={styles.welcomeStep}><span>2</span><div><strong>AI is included</strong><p>Hosted AI comes with your account — no key, no setup, a free monthly allowance. Bring your own OpenAI key any time for unlimited use.</p></div></div>
                 <div className={styles.welcomeStep}><span>3</span><div><strong>Chat or run tasks</strong><p>Ask it to explain the architecture, review your changes, or make a guarded edit — with approval before anything risky.</p></div></div>
               </div>
               <div className={styles.welcomeActions}>
@@ -266,8 +284,8 @@ export default function App() {
                 <h2>{activeFolder.name}</h2>
                 <span className={styles.folderPath}>{activeFolder.path}</span>
                 <div className={styles.statusRow}>
-                  <span className={`${styles.statusPill} ${hasApiKey ? styles.ok : styles.warn}`}>
-                    {hasApiKey ? 'API Key Ready' : 'API Key Needed'}
+                  <span className={`${styles.statusPill} ${aiReady ? styles.ok : styles.warn}`}>
+                    {aiMode === 'byo' ? 'AI ready · your key' : aiMode === 'hosted' ? 'AI ready · hosted' : 'Connect AI'}
                   </span>
                   {agentConfig && <span className={`${styles.statusPill} ${styles.neutral}`}>{agentConfig.archetype}</span>}
                   {agentConfig?.tone && <span className={`${styles.statusPill} ${styles.neutral}`}>tone: {agentConfig.tone}</span>}
@@ -285,9 +303,9 @@ export default function App() {
             <div className={styles.usageBar}>
               <div className={styles.usageBarLeft}>
                 <span className={`${styles.usagePlanPill} ${styles[usage.planTier] || ''}`}>{usage.planTier}</span>
-                <span className={`${styles.usageCallsLabel} ${!canSendAI ? styles.exhausted : ''}`}>
+                <span className={`${styles.usageCallsLabel} ${!effectiveCanSendAI ? styles.exhausted : ''}`}>
                   {aiCallsLabel}
-                  {isFreeTier && (
+                  {showCallsMeter && (
                     <span className={styles.usageCallsTrack}>
                       <span
                         className={styles.usageCallsFill}
@@ -329,9 +347,10 @@ export default function App() {
                   tasks={tasks}
                   jobs={jobs}
                   selectedTaskId={selectedTaskId}
-                  hasApiKey={hasApiKey}
+                  aiReady={aiReady}
+                  voiceReady={aiMode === 'byo'}
                   archetype={agentConfig?.archetype}
-                  canSendAI={canSendAI}
+                  canSendAI={effectiveCanSendAI}
                   onRunTask={handleRunTask}
                   onAddTask={addTask}
                   onToggleTask={(task) => updateTask(task.id, { status: task.status === 'suggested' ? 'open' : task.status === 'open' ? 'done' : 'open' })}
@@ -428,8 +447,8 @@ export default function App() {
       {upgradeReason && (
         <UpgradeModal
           reason={upgradeReason}
+          user={user}
           onClose={() => setUpgradeReason(null)}
-          onUpgrade={() => { window.open('https://foldermind.app/pricing', '_blank'); setUpgradeReason(null) }}
         />
       )}
 

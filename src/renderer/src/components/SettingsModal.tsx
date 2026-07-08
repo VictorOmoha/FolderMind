@@ -71,7 +71,7 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
               <p className="muted">No folder open yet. You can add your API key now, then open a folder to configure its agent.</p>
             )}
             <div className={styles.divider} />
-            <span className={styles.label}>OpenAI API Key (Session-only)</span>
+            <span className={styles.label}>Your own OpenAI key (optional, session-only)</span>
             <input
               type="password"
               className={styles.input}
@@ -79,7 +79,7 @@ export function SettingsModal({ open, folderName, folderPath, agentConfig, onClo
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
             />
-            <p className={styles.help}>This key is stored only in memory for the current session. For permanent usage, add OPENAI_API_KEY to your project's .env file (do not use the VITE_ prefix — it would bundle the key into the app).</p>
+            <p className={styles.help}>Hosted AI is included with your account — no key needed. Add your own OpenAI key for unlimited AI that talks to OpenAI directly; it's kept in memory for this session only. For permanent use, add OPENAI_API_KEY to your project's .env file (no VITE_ prefix — that would bundle the key into the app).</p>
           </div>
 
           {agentConfig && <>

@@ -10,7 +10,7 @@ interface Props {
   voiceAutoMode: boolean
   lastTranscript: string
   error: string | null
-  hasApiKey: boolean
+  voiceReady: boolean
   onToggle: () => void
   onToggleReplies: () => void
   onToggleAutoMode: () => void
@@ -40,7 +40,7 @@ export function VoicePanel({
   voiceAutoMode,
   lastTranscript,
   error,
-  hasApiKey,
+  voiceReady,
   onToggle,
   onToggleReplies,
   onToggleAutoMode,
@@ -62,9 +62,9 @@ export function VoicePanel({
         <button
           className={`${styles.micBtn} ${styles[state] || ''}`}
           onClick={onToggle}
-          disabled={!hasApiKey || transcribing}
+          disabled={!voiceReady || transcribing}
           aria-label={state === 'listening' ? 'Stop recording' : 'Start recording'}
-          title={!hasApiKey ? 'Add your OpenAI API key to enable voice' : undefined}
+          title={!voiceReady ? 'Voice needs your own OpenAI key — add one in Settings' : undefined}
         >
           <span className={styles.micIcon}>{STATE_ICON[state]}</span>
           {state === 'listening' && <span className={styles.micRing} />}
@@ -102,9 +102,9 @@ export function VoicePanel({
       {error && <div className={styles.error}>{error}</div>}
 
       {/* ── No API key hint ── */}
-      {!hasApiKey && (
+      {!voiceReady && (
         <p className="muted" style={{ fontSize: '11px', marginTop: 4 }}>
-          Add your OpenAI API key in Settings to enable voice.
+          Voice needs your own OpenAI key — add one in Settings.
         </p>
       )}
     </section>
